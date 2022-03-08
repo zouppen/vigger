@@ -35,23 +35,22 @@ main = do
 
 -- |Watch given directory, enqueuing events as they occur.
 watch :: EventHandler IO -> INotify -> ByteString -> IO WatchDescriptor
-watch eventH inotifyH dir =
-  addWatch inotifyH [CloseWrite] dir $ handleEvent $ enqueue eventH dir
+watch sendEvent h dir = addWatch h [CloseWrite] dir handleEvent
+  where handleEvent = maybe nop send . toClosedFile
+        send file = eventify dir file >>= sendEvent
 
--- |Enqueue event, used by handler to make it implementation neutral.
-enqueue :: EventHandler IO -> ByteString -> ByteString -> IO ()
-enqueue h dir file = do
+-- |Convert directory name, file name and current time to FileEvent
+eventify :: ByteString -> ByteString -> IO FileEvent
+eventify dir file = do
   time <- epochTime
   let path = B.concat [dir, "/", file]
-  h FileEvent{..}
+  pure FileEvent{..}
 
--- |Perform given task with file name if Event has correct type.
-handleEvent :: Applicative f => (ByteString -> f ()) -> Event -> f ()
-handleEvent enq e = case e of
-  Closed{..} -> case (isDirectory, maybeFilePath) of
-    (False, Just file) -> enq file
-    _ -> pure ()
-  _ -> pure ()
+-- |Converts Event to file name of the closed file or Nothing if it's
+-- something else.
+toClosedFile :: Event -> Maybe ByteString
+toClosedFile Closed{..} = if isDirectory then Nothing else maybeFilePath
+toClosedFile _ = Nothing
 
 -- |Process queue. Given file is removed after maxAge if "put" is Nothing.
 processQueue :: CTime -> STM FileEvent -> STM (Maybe (ByteString -> STM ())) -> IO ()
