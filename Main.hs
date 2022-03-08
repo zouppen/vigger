@@ -27,7 +27,8 @@ main = do
   withINotify $ \ih -> do
     w <- watch ih dir
     captureState <- pure $ pure Nothing --readTVar <$> newTVarIO Nothing
-    processQueue maxAge (queue w) captureState
+    let dequeue = atomically $ readTQueue $ queue w
+    processQueue maxAge dequeue captureState
   pure ()
   where maxAge = 5
 
@@ -54,10 +55,10 @@ handler enq e = case e of
   _ -> pure ()
 
 -- |Purge old ones
-processQueue :: CTime -> TQueue FileEvent -> STM (Maybe (ByteString -> STM ())) -> IO ()
-processQueue maxAge q captureState = forever $ do
+processQueue :: CTime -> IO FileEvent -> STM (Maybe (ByteString -> STM ())) -> IO ()
+processQueue maxAge get captureState = forever $ do
   -- Get the next item
-  FileEvent{..} <- atomically $ readTQueue q
+  FileEvent{..} <- get
 
   -- Adding delay if it hasn't yet expired
   delayState <- do
