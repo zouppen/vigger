@@ -28,7 +28,7 @@ main = do
     w <- watch eh ih dir
     captureState <- pure $ pure Nothing --readTVar <$> newTVarIO Nothing
     let dequeue = readTQueue q
-    processQueue maxAge dequeue captureState
+    forever $ processMsg maxAge dequeue captureState
     pure ()
   pure ()
   where maxAge = 5
@@ -52,9 +52,9 @@ toClosedFile :: Event -> Maybe ByteString
 toClosedFile Closed{..} = if isDirectory then Nothing else maybeFilePath
 toClosedFile _ = Nothing
 
--- |Process queue. Given file is removed after maxAge if "put" is Nothing.
-processQueue :: CTime -> STM FileEvent -> STM (Maybe (ByteString -> STM ())) -> IO ()
-processQueue maxAge get put = forever $ do
+-- |Process a single message. Given file is removed after maxAge if "put" is Nothing.
+processMsg :: CTime -> STM FileEvent -> STM (Maybe (ByteString -> STM ())) -> IO ()
+processMsg maxAge get put = do
   -- Get the next item
   FileEvent{..} <- atomically get
 
