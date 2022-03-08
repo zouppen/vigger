@@ -27,7 +27,7 @@ main = do
   withINotify $ \ih -> do
     w <- watch ih dir
     captureState <- pure $ pure Nothing --readTVar <$> newTVarIO Nothing
-    let dequeue = atomically $ readTQueue $ queue w
+    let dequeue = readTQueue $ queue w
     processQueue maxAge dequeue captureState
   pure ()
   where maxAge = 5
@@ -54,11 +54,11 @@ handler enq e = case e of
     _ -> pure ()
   _ -> pure ()
 
--- |Purge old ones
-processQueue :: CTime -> IO FileEvent -> STM (Maybe (ByteString -> STM ())) -> IO ()
-processQueue maxAge get captureState = forever $ do
+-- |Process queue. Given file is removed after maxAge if "put" is Nothing.
+processQueue :: CTime -> STM FileEvent -> STM (Maybe (ByteString -> STM ())) -> IO ()
+processQueue maxAge get put = forever $ do
   -- Get the next item
-  FileEvent{..} <- get
+  FileEvent{..} <- atomically get
 
   -- Adding delay if it hasn't yet expired
   delayState <- do
@@ -70,7 +70,7 @@ processQueue maxAge get captureState = forever $ do
 
   -- Perform remove or "keep" operation based on the state
   join $ atomically $ do
-    capture <- captureState
+    capture <- put
     expired <- delayState
     case (capture, expired) of
       -- If we collect, move it to that queue
