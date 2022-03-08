@@ -14,41 +14,40 @@ import Control.Concurrent.STM
 import Control.Concurrent.STM.TQueue
 import Control.Monad (forever, join)
 
-data WatchDir = WatchDir { queue   :: TQueue FileEvent
-                         , watcher :: WatchDescriptor
-                         }
-
 data FileEvent = FileEvent { time :: EpochTime
                            , path :: ByteString
                            } deriving (Show)
 
+type EventHandler m = FileEvent -> m ()
+
 main = do
   [dir] <- getArgs
+  q <- newTQueueIO
   withINotify $ \ih -> do
-    w <- watch ih dir
+    let eh = atomically . writeTQueue q
+    w <- watch eh ih dir
     captureState <- pure $ pure Nothing --readTVar <$> newTVarIO Nothing
-    let dequeue = readTQueue $ queue w
+    let dequeue = readTQueue q
     processQueue maxAge dequeue captureState
+    pure ()
   pure ()
   where maxAge = 5
 
 -- |Watch given directory, enqueuing events as they occur.
-watch :: INotify -> ByteString -> IO WatchDir
-watch h dir = do
-  queue <- newTQueueIO
-  watcher <- addWatch h [CloseWrite] dir $ handler $ enqueue queue dir
-  pure WatchDir{..}
+watch :: EventHandler IO -> INotify -> ByteString -> IO WatchDescriptor
+watch eventH inotifyH dir =
+  addWatch inotifyH [CloseWrite] dir $ handleEvent $ enqueue eventH dir
 
 -- |Enqueue event, used by handler to make it implementation neutral.
-enqueue :: TQueue FileEvent -> ByteString -> ByteString -> IO ()
-enqueue q dir file = do
+enqueue :: EventHandler IO -> ByteString -> ByteString -> IO ()
+enqueue h dir file = do
   time <- epochTime
   let path = B.concat [dir, "/", file]
-  atomically $ writeTQueue q FileEvent{..}
+  h FileEvent{..}
 
 -- |Perform given task with file name if Event has correct type.
-handler :: Applicative f => (ByteString -> f ()) -> Event -> f ()
-handler enq e = case e of
+handleEvent :: Applicative f => (ByteString -> f ()) -> Event -> f ()
+handleEvent enq e = case e of
   Closed{..} -> case (isDirectory, maybeFilePath) of
     (False, Just file) -> enq file
     _ -> pure ()
