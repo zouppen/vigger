@@ -25,7 +25,7 @@ main = do
   q <- newTQueueIO
   withINotify $ \ih -> do
     let eh = atomically . writeTQueue q
-    w <- watch eh ih dir
+    w <- watchCloses ih eh dir
     captureState <- pure $ pure Nothing --readTVar <$> newTVarIO Nothing
     let dequeue = readTQueue q
     forever $ processMsg maxAge dequeue captureState
@@ -34,8 +34,8 @@ main = do
   where maxAge = 5
 
 -- |Watch given directory, enqueuing events as they occur.
-watch :: EventHandler IO -> INotify -> ByteString -> IO WatchDescriptor
-watch sendEvent h dir = addWatch h [CloseWrite] dir handleEvent
+watchCloses :: INotify -> EventHandler IO -> ByteString -> IO WatchDescriptor
+watchCloses h sendEvent dir = addWatch h [CloseWrite] dir handleEvent
   where handleEvent = maybe nop send . toClosedFile
         send file = eventify dir file >>= sendEvent
 
