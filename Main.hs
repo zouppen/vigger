@@ -18,14 +18,13 @@ data FileEvent = FileEvent { time :: EpochTime
                            , path :: ByteString
                            } deriving (Show)
 
-type EventHandler m = FileEvent -> m ()
 
 main = do
   [dir] <- getArgs
   q <- newTQueueIO
   withINotify $ \ih -> do
     let eh = atomically . writeTQueue q
-    w <- watchCloses ih eh dir
+    w <- watchClosures ih eh dir
     captureState <- pure $ pure Nothing --readTVar <$> newTVarIO Nothing
     let dequeue = readTQueue q
     forever $ processMsg maxAge dequeue captureState
@@ -34,8 +33,8 @@ main = do
   where maxAge = 5
 
 -- |Watch given directory, enqueuing events as they occur.
-watchCloses :: INotify -> EventHandler IO -> ByteString -> IO WatchDescriptor
-watchCloses h sendEvent dir = addWatch h [CloseWrite] dir handleEvent
+watchClosures :: INotify -> (FileEvent -> IO ()) -> ByteString -> IO WatchDescriptor
+watchClosures h sendEvent dir = addWatch h [CloseWrite] dir handleEvent
   where handleEvent = maybe nop send . toClosedFile
         send file = eventify dir file >>= sendEvent
 
