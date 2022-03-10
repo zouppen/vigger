@@ -24,19 +24,19 @@ data Watch = Watch { maxAge       :: CTime
                    , eventQueue   :: TQueue FileEvent
                    , eventInHand  :: TVar (Maybe FileEvent)
                    , purgeEnabled :: TVar Bool
-                   , watchDesc    :: WatchDescriptor
-                   , purgeThread  :: ThreadId
                    }
+
+data WatchOut = WatchOut { watchData    :: Watch
+                         , watchDesc    :: WatchDescriptor
+                         , purgeThread  :: ThreadId
+                         }
 
 main = do
   [dir] <- getArgs
-  q <- newTQueueIO
+  trashQueue <- newTQueueIO
+  let trash = writeTQueue trashQueue
   withINotify $ \ih -> do
-    let eh = atomically . writeTQueue q
-    w <- watchClosures ih eh dir
-    captureState <- pure $ pure Nothing --readTVar <$> newTVarIO Nothing
-    let dequeue = readTQueue q
-    forever $ processMsg maxAge dequeue captureState
+    w <- forkWatch trash maxAge ih dir
     pure ()
   pure ()
   where maxAge = 5
@@ -58,13 +58,26 @@ stopMotion Watch{..} = do
             map path <$> flushTQueue eventQueue
 
 -- |Stop watching. Undefined behaviour if called twice.
-stopWatch :: Trash -> Watch -> IO ()
-stopWatch trash Watch{..} = do
+stopWatch :: Trash -> WatchOut -> IO ()
+stopWatch trash WatchOut{..} = do
+  let Watch{..} = watchData
   removeWatch watchDesc
   killThread purgeThread
   atomically $ do
     readTVar eventInHand >>= maybe nop (trash . path)
     flushTQueue eventQueue >>= mapM_ (trash . path)
+
+forkWatch :: Trash -> CTime -> INotify -> ByteString -> IO WatchOut
+forkWatch trash maxAge ih dir = do
+  eventQueue <- newTQueueIO
+  eventInHand <- newTVarIO Nothing
+  purgeEnabled <- newTVarIO True -- Motion stopped at start
+  let watchData = Watch{..}
+  
+  purgeThread <- forkIO $ forever $ purgeMsg trash watchData
+  let eh = atomically . writeTQueue eventQueue
+  watchDesc <- watchClosures ih eh dir
+  pure WatchOut{..}
 
 -- |Watch given directory, enqueuing events as they occur.
 watchClosures :: INotify -> (FileEvent -> IO ()) -> ByteString -> IO WatchDescriptor
@@ -85,33 +98,41 @@ toClosedFile :: Event -> Maybe ByteString
 toClosedFile Closed{..} = if isDirectory then Nothing else maybeFilePath
 toClosedFile _ = Nothing
 
--- |Process a single message. Given file is removed after maxAge if "put" is Nothing.
-processMsg :: CTime -> STM FileEvent -> STM (Maybe (ByteString -> STM ())) -> IO ()
-processMsg maxAge get put = do
-  -- Get the next item
-  FileEvent{..} <- atomically get
+-- |Purge old file if we have permission to do so. Has a problem in
+-- where an event might be lost if startMotion and stopMotion occur
+-- between two transactions.
+purgeMsg :: Trash -> Watch -> IO ()
+purgeMsg trash Watch{..} = do
+  FileEvent{..} <- atomically $ do
+    -- Keep going only if purging is enabled
+    readTVar purgeEnabled >>= guard
+    -- Take one item and place it to "hand" to avoid race conditions.
+    a <- readTQueue eventQueue
+    writeTVar eventInHand $ Just a
+    pure a
 
-  -- Adding delay if it hasn't yet expired
-  delayState <- do
+  -- Create delay action to span over the expiration time
+  delay <- do
     now <- epochTime
     let expiresIn = time - now + maxAge
-    if expiresIn > 0
-      then readTVar <$> registerDelay (1000000 * fromEnum expiresIn)
-      else pure $ pure True -- No delay
+    delayGuard $ 1000000 * fromEnum expiresIn
 
-  -- Perform remove or "keep" operation based on the state
-  join $ atomically $ do
-    capture <- put
-    expired <- delayState
-    case (capture, expired) of
-      -- If we collect, move it to that queue
-      (Just enq, _) -> do
-        enq path
-        pure nop
-      -- If we don't collect, drop the file after the delay
-      (_, True) -> pure $ removeLink path
-      -- Otherwise we wait
-      _ -> retry
+  -- File removal at expiration time or falltrough
+  atomically $ do
+    enabled <- readTVar purgeEnabled
+    when enabled $ do
+      -- Ensure delay spent and add item to remove queue and release it.
+      delay
+      trash path
+      writeTVar eventInHand Nothing
+
+-- |Retuns STM action which retries until given timeout reached
+delayGuard :: Int -> IO (STM ())
+delayGuard delay
+  | delay > 0 = do
+      var <- registerDelay delay
+      pure $ readTVar var >>= guard
+  | otherwise = pure nop
 
 -- |Shorthand for doing nothing
 nop :: Applicative m => m ()
