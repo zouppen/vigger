@@ -67,7 +67,7 @@ forkWatch trash maxAge ih dir = do
   eventQueue <- newTQueueIO
   eventInHand <- newTVarIO Nothing
   purgeEnabled <- newTVarIO True -- Motion stopped at start  
-  purgeThread <- forkIO $ forever $ purgeMsg
+  purgeThread <- forkIO $ forever $ purgeEvent
     maxAge
     trash
     (readTQueue eventQueue)
@@ -99,13 +99,13 @@ toClosedFile _ = Nothing
 -- |Purge old file if we have permission to do so. Has a problem in
 -- where an event might be lost if startMotion and stopMotion occur
 -- between two transactions.
-purgeMsg :: CTime
-          -> (ByteString -> STM a)
-          -> STM FileEvent
-          -> (Maybe FileEvent -> STM ())
-          -> STM Bool
-          -> IO ()
-purgeMsg maxAge trash get hold purgeEnabled = do
+purgeEvent :: CTime
+           -> (ByteString -> STM a)
+           -> STM FileEvent
+           -> (Maybe FileEvent -> STM ())
+           -> STM Bool
+           -> IO ()
+purgeEvent maxAge trash get hold purgeEnabled = do
   FileEvent{..} <- atomically $ do
     -- Keep going only if purging is enabled
     purgeEnabled >>= guard
