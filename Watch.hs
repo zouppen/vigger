@@ -1,5 +1,10 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
-module Watch where
+module Watch ( Watch
+             , startCapture
+             , stopCapture
+             , forkWatch
+             , stopWatch
+             ) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
