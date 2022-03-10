@@ -20,16 +20,12 @@ data FileEvent = FileEvent { time :: EpochTime
 
 type Trash = ByteString -> STM ()
 
-data Watch = Watch { maxAge       :: CTime
-                   , eventQueue   :: TQueue FileEvent
+data Watch = Watch { eventQueue   :: TQueue FileEvent
                    , eventInHand  :: TVar (Maybe FileEvent)
                    , purgeEnabled :: TVar Bool
+                   , watchDesc    :: WatchDescriptor
+                   , purgeThread  :: ThreadId
                    }
-
-data WatchOut = WatchOut { watchData    :: Watch
-                         , watchDesc    :: WatchDescriptor
-                         , purgeThread  :: ThreadId
-                         }
 
 main = do
   [dir] <- getArgs
@@ -58,26 +54,28 @@ stopMotion Watch{..} = do
             map path <$> flushTQueue eventQueue
 
 -- |Stop watching. Undefined behaviour if called twice.
-stopWatch :: Trash -> WatchOut -> IO ()
-stopWatch trash WatchOut{..} = do
-  let Watch{..} = watchData
+stopWatch :: Trash -> Watch -> IO ()
+stopWatch trash Watch{..} = do
   removeWatch watchDesc
   killThread purgeThread
   atomically $ do
     readTVar eventInHand >>= maybe nop (trash . path)
     flushTQueue eventQueue >>= mapM_ (trash . path)
 
-forkWatch :: Trash -> CTime -> INotify -> ByteString -> IO WatchOut
+forkWatch :: Trash -> CTime -> INotify -> ByteString -> IO Watch
 forkWatch trash maxAge ih dir = do
   eventQueue <- newTQueueIO
   eventInHand <- newTVarIO Nothing
-  purgeEnabled <- newTVarIO True -- Motion stopped at start
-  let watchData = Watch{..}
-  
-  purgeThread <- forkIO $ forever $ purgeMsg trash watchData
+  purgeEnabled <- newTVarIO True -- Motion stopped at start  
+  purgeThread <- forkIO $ forever $ purgeMsg
+    maxAge
+    trash
+    (readTQueue eventQueue)
+    (writeTVar eventInHand)
+    (readTVar purgeEnabled)
   let eh = atomically . writeTQueue eventQueue
   watchDesc <- watchClosures ih eh dir
-  pure WatchOut{..}
+  pure Watch{..}
 
 -- |Watch given directory, enqueuing events as they occur.
 watchClosures :: INotify -> (FileEvent -> IO ()) -> ByteString -> IO WatchDescriptor
@@ -101,14 +99,19 @@ toClosedFile _ = Nothing
 -- |Purge old file if we have permission to do so. Has a problem in
 -- where an event might be lost if startMotion and stopMotion occur
 -- between two transactions.
-purgeMsg :: Trash -> Watch -> IO ()
-purgeMsg trash Watch{..} = do
+purgeMsg :: CTime
+          -> (ByteString -> STM a)
+          -> STM FileEvent
+          -> (Maybe FileEvent -> STM ())
+          -> STM Bool
+          -> IO ()
+purgeMsg maxAge trash get hold purgeEnabled = do
   FileEvent{..} <- atomically $ do
     -- Keep going only if purging is enabled
-    readTVar purgeEnabled >>= guard
+    purgeEnabled >>= guard
     -- Take one item and place it to "hand" to avoid race conditions.
-    a <- readTQueue eventQueue
-    writeTVar eventInHand $ Just a
+    a <- get
+    hold $ Just a
     pure a
 
   -- Create delay action to span over the expiration time
@@ -119,12 +122,12 @@ purgeMsg trash Watch{..} = do
 
   -- File removal at expiration time or falltrough
   atomically $ do
-    enabled <- readTVar purgeEnabled
+    enabled <- purgeEnabled
     when enabled $ do
       -- Ensure delay spent and add item to remove queue and release it.
       delay
       trash path
-      writeTVar eventInHand Nothing
+      hold Nothing
 
 -- |Retuns STM action which retries until given timeout reached
 delayGuard :: Int -> IO (STM ())
