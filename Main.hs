@@ -119,7 +119,11 @@ toClosedFile _ = Nothing
 runTrasher :: IO (ThreadId, ByteString -> STM ())
 runTrasher = do
   q <- newTQueueIO
-  tid <- forkIO $ forever $ atomically (flushTQueue q) >>= mapM_ print --removeLink
+  tid <- forkIO $ forever $ do
+    list <- atomically $ do
+      isEmptyTQueue q >>= guard . not
+      flushTQueue q
+    mapM_ removeLink list
   pure (tid, writeTQueue q)
   
 -- |Purge old file if we have permission to do so. Has a problem in
