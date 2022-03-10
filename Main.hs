@@ -12,12 +12,21 @@ import Foreign.C.Types (CTime)
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TQueue
-import Control.Monad (forever, join)
+import Control.Monad (when, forever, guard)
 
 data FileEvent = FileEvent { time :: EpochTime
                            , path :: ByteString
                            } deriving (Show)
 
+type Trash = ByteString -> STM ()
+
+data Watch = Watch { maxAge       :: CTime
+                   , eventQueue   :: TQueue FileEvent
+                   , eventInHand  :: TVar (Maybe FileEvent)
+                   , purgeEnabled :: TVar Bool
+                   , watchDesc    :: WatchDescriptor
+                   , purgeThread  :: ThreadId
+                   }
 
 main = do
   [dir] <- getArgs
@@ -31,6 +40,31 @@ main = do
     pure ()
   pure ()
   where maxAge = 5
+
+-- |Start motion
+startMotion :: Watch -> STM ()
+startMotion Watch{..} = writeTVar purgeEnabled False
+
+-- |Stop motion, returns video files TODO encoded video.
+stopMotion :: Watch -> STM [ByteString]
+stopMotion Watch{..} = do
+  purging <- readTVar purgeEnabled
+  if purging
+    then pure $ error "motionStop called without motionStart"
+    else do writeTVar purgeEnabled True
+            -- Put the item back if there's any
+            readTVar eventInHand >>= maybe nop (unGetTQueue eventQueue)
+            -- Get the contents
+            map path <$> flushTQueue eventQueue
+
+-- |Stop watching. Undefined behaviour if called twice.
+stopWatch :: Trash -> Watch -> IO ()
+stopWatch trash Watch{..} = do
+  removeWatch watchDesc
+  killThread purgeThread
+  atomically $ do
+    readTVar eventInHand >>= maybe nop (trash . path)
+    flushTQueue eventQueue >>= mapM_ (trash . path)
 
 -- |Watch given directory, enqueuing events as they occur.
 watchClosures :: INotify -> (FileEvent -> IO ()) -> ByteString -> IO WatchDescriptor
