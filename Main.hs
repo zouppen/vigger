@@ -29,13 +29,31 @@ data Watch = Watch { eventQueue   :: TQueue FileEvent
 
 main = do
   [dir] <- getArgs
-  trashQueue <- newTQueueIO
-  let trash = writeTQueue trashQueue
+  (_, trash) <- runTrasher
   withINotify $ \ih -> do
     w <- forkWatch trash maxAge ih dir
-    pure ()
+    cmdLoop w
+    stopWatch trash w
   pure ()
   where maxAge = 5
+
+cmdLoop :: Watch -> IO ()
+cmdLoop w = do
+  cmd <- getLine
+  case cmd of
+    "start" -> do
+      atomically $ startMotion w
+      putStrLn "Motion started"
+      cmdLoop w
+    "stop" -> do
+      files <- atomically $ stopMotion w
+      putStrLn $ "Motion stopped " ++ show files
+      cmdLoop w
+    "quit" -> do
+      putStrLn "Quitting"
+    _ -> do
+      putStrLn "Unknown command"
+      cmdLoop w
 
 -- |Start motion
 startMotion :: Watch -> STM ()
@@ -62,6 +80,7 @@ stopWatch trash Watch{..} = do
     readTVar eventInHand >>= maybe nop (trash . path)
     flushTQueue eventQueue >>= mapM_ (trash . path)
 
+-- |Start watching given directory with wiven purge timeout.
 forkWatch :: Trash -> CTime -> INotify -> ByteString -> IO Watch
 forkWatch trash maxAge ih dir = do
   eventQueue <- newTQueueIO
@@ -96,6 +115,13 @@ toClosedFile :: Event -> Maybe ByteString
 toClosedFile Closed{..} = if isDirectory then Nothing else maybeFilePath
 toClosedFile _ = Nothing
 
+-- |Create queue which just removes everything sent there 
+runTrasher :: IO (ThreadId, ByteString -> STM ())
+runTrasher = do
+  q <- newTQueueIO
+  tid <- forkIO $ forever $ atomically (flushTQueue q) >>= mapM_ print --removeLink
+  pure (tid, writeTQueue q)
+  
 -- |Purge old file if we have permission to do so. Has a problem in
 -- where an event might be lost if startMotion and stopMotion occur
 -- between two transactions.
