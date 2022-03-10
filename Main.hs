@@ -1,10 +1,11 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 module Main where
 
-import System.Posix.Env.ByteString
+import System.Posix.Env.ByteString (getArgs)
 import System.INotify
 import Control.Concurrent.STM
+
 import Watch
+import Trasher
 
 main = do
   [dir] <- getArgs
@@ -21,11 +22,11 @@ cmdLoop w = do
   cmd <- getLine
   case cmd of
     "start" -> do
-      atomically $ startMotion w
+      atomically $ startCapture w
       putStrLn "Motion started"
       cmdLoop w
     "stop" -> do
-      files <- atomically $ stopMotion w
+      files <- atomically $ stopCapture w
       putStrLn $ "Motion stopped " ++ show files
       cmdLoop w
     "quit" -> do

@@ -3,7 +3,6 @@ module Watch where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import System.Posix.Files.ByteString (removeLink)
 import System.INotify
 import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
@@ -12,11 +11,11 @@ import Control.Concurrent (ThreadId, forkIO, killThread)
 import Control.Concurrent.STM
 import Control.Monad (when, forever, guard)
 
+import Trasher (Trash)
+
 data FileEvent = FileEvent { time :: EpochTime
                            , path :: ByteString
                            } deriving (Show)
-
-type Trash = ByteString -> STM ()
 
 data Watch = Watch { eventQueue   :: TQueue FileEvent
                    , eventInHand  :: TVar (Maybe FileEvent)
@@ -25,13 +24,13 @@ data Watch = Watch { eventQueue   :: TQueue FileEvent
                    , purgeThread  :: ThreadId
                    }
 
--- |Start motion
-startMotion :: Watch -> STM ()
-startMotion Watch{..} = writeTVar purgeEnabled False
+-- |Start capture
+startCapture :: Watch -> STM ()
+startCapture Watch{..} = writeTVar purgeEnabled False
 
--- |Stop motion, returns video files TODO encoded video.
-stopMotion :: Watch -> STM [ByteString]
-stopMotion Watch{..} = do
+-- |Stop capture, returns file names
+stopCapture :: Watch -> STM [ByteString]
+stopCapture Watch{..} = do
   purging <- readTVar purgeEnabled
   if purging
     then pure $ error "motionStop called without motionStart"
@@ -85,17 +84,6 @@ toClosedFile :: Event -> Maybe ByteString
 toClosedFile Closed{..} = if isDirectory then Nothing else maybeFilePath
 toClosedFile _ = Nothing
 
--- |Create queue which just removes everything sent there 
-runTrasher :: IO (ThreadId, ByteString -> STM ())
-runTrasher = do
-  q <- newTQueueIO
-  tid <- forkIO $ forever $ do
-    list <- atomically $ do
-      isEmptyTQueue q >>= guard . not
-      flushTQueue q
-    mapM_ removeLink list
-  pure (tid, writeTQueue q)
-  
 -- |Purge old file if we have permission to do so. Has a problem in
 -- where an event might be lost if startMotion and stopMotion occur
 -- between two transactions.
