@@ -1,66 +1,20 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 module Main where
 
 import qualified Data.ByteString as B
 import System.INotify
 import Control.Concurrent.STM
-import Options.Applicative
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text (Text)
-import Data.Map.Strict
-import GHC.Generics
-import Data.Yaml hiding (Parser)
-import System.Exit (die)
+
+import Config
 import Watch
 import Trasher
 
-data Options = Options
-  { confFile :: FilePath
-  } deriving (Show)
-
-
-data Config = Config { triggers :: Map String Trigger
-                     } deriving (Show, Generic)
-
-data Trigger = Trigger { cameras :: Map String Camera
-                       } deriving (Show, Generic)
-
-data Camera = Camera { url        :: String
-                     , precapture :: Int
-                     } deriving (Show, Generic)
-
-
-instance FromJSON Config
-
-instance FromJSON Trigger
-
-instance FromJSON Camera
-
-optParser :: Parser Options
-optParser = Options
-  <$> strOption ( mempty
-                  <> short 'c'
-                  <> long "config"
-                  <> metavar "FILE"
-                  <> help "Configuration file in YAML format"
-                )
-
-opts = info (optParser <**> helper)
-       ( fullDesc
-         <> header ("vigger - Video trigger for FFmpeg compatible cameras")
-       )
 
 main = do
-  Options{..} <- execParser opts
-  conf <- decodeFileEither confFile >>= yamlError confFile
-  
-  print (conf :: Config)
-
--- |Dies if it has a ParseException or continues execution otherwise.
-yamlError :: String -> Either ParseException a -> IO a
-yamlError _ (Right a) = pure a
-yamlError name (Left e)  = die $
-  "Error while reading " ++ name ++ ":\n" ++ prettyPrintParseException e
+  conf <- parseCommandAndConfig
+  print conf
 
 {-
   [dir] <- getArgs
@@ -90,4 +44,3 @@ cmdLoop w = do
     _ -> do
       putStrLn "Unknown command"
       cmdLoop w
-
