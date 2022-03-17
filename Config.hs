@@ -26,7 +26,6 @@ data Options = Options
   { confFile :: FilePath
   } deriving (Show)
 
-
 data Config = Config { triggers :: Map String Trigger
                      } deriving (Show, Generic)
 
