@@ -6,8 +6,9 @@ import System.INotify
 import Control.Concurrent.STM
 import Data.ByteString.UTF8 (fromString)
 import System.IO.Temp
-import qualified Data.Map.Strict as M
+import Data.Map.Strict (Map, (!?), keys)
 import Data.Foldable (traverse_)
+import Control.Exception (IOException, try)
 
 import Config
 import Watch
@@ -26,7 +27,7 @@ data CameraOp = CameraOp { watch    :: Watch
 
 -- |Operations for a single trigger.
 data TriggerOp = TriggerOp { motionStart :: IO ()
-                           , motionEnd   :: IO (M.Map String [B.ByteString])
+                           , motionEnd   :: IO (Map String [B.ByteString])
                            , shutdown    :: IO ()
                            }
 
@@ -36,9 +37,8 @@ main = do
   withStuff $ \stuff -> do
     -- Start everything
     triggerOps <- traverse (forkTrigger stuff) triggers
-    -- TODO event loop
-    getLine
-    pure ()
+    -- Handle incoming events
+    cmdLoop triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps
 
@@ -76,31 +76,37 @@ forkCamera Stuff{..} Camera{..} = do
   -- Return handle
   pure CameraOp{..}
 
-{-
-  [dir] <- getArgs
-  (_, trash) <- runTrasher
-  withINotify $ \ih -> do
-    w <- forkWatch trash maxAge ih dir
-    cmdLoop w
-    stopWatch trash w
-  pure ()
-  where maxAge = 5
--}
-
-cmdLoop :: Watch -> IO ()
+cmdLoop :: Map String TriggerOp -> IO ()
 cmdLoop w = do
-  cmd <- getLine
+  cmd <- getCmd
   case cmd of
-    "start" -> do
-      atomically $ startCapture w
-      putStrLn "Motion started"
+    ["list"] -> do
+      putStr $ unlines $ keys w
       cmdLoop w
-    "stop" -> do
-      files <- atomically $ stopCapture w
-      putStrLn $ "Motion stopped " ++ show files
+    ["start", key] -> do
+      case w !? key of
+        Just TriggerOp{..} -> do
+          motionStart
+          putStrLn $ "Motion started on " ++ key
+        Nothing -> putStrLn "Trigger not found"
       cmdLoop w
-    "quit" -> do
+    ["stop", key] -> do
+      case w !? key of
+        Just TriggerOp{..} -> do
+          files <- motionEnd
+          putStrLn $ "Motion stopped on " ++ key ++ ". Got files: " ++ show files
+        Nothing -> putStrLn "Trigger not found"
+      cmdLoop w
+    ["quit"] -> do
       putStrLn "Quitting"
     _ -> do
       putStrLn "Unknown command"
       cmdLoop w
+
+-- |Gets a command and splits it into words. If EOF reached, returns ["quit"].
+getCmd :: IO [String]
+getCmd = do
+  line <- try getLine :: IO (Either IOException String)
+  case line of
+    Right a -> pure $ words a
+    Left _ -> pure ["quit"]
