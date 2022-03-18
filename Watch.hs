@@ -16,6 +16,7 @@ import Control.Concurrent (ThreadId, forkIO, killThread)
 import Control.Concurrent.STM
 import Control.Monad (when, forever, guard)
 
+import Exceptions
 import Trasher (Trash)
 
 data FileEvent = FileEvent { time :: EpochTime
@@ -37,13 +38,13 @@ startCapture Watch{..} = writeTVar purgeEnabled False
 stopCapture :: Watch -> STM [ByteString]
 stopCapture Watch{..} = do
   purging <- readTVar purgeEnabled
-  if purging
-    then pure $ error "motionStop called without motionStart"
-    else do writeTVar purgeEnabled True
-            -- Put the item back if there's any
-            readTVar eventInHand >>= maybe nop (unGetTQueue eventQueue)
-            -- Get the contents
-            map path <$> flushTQueue eventQueue
+  when purging $ throwSTM $ ViggerException "motionStop called without motionStart"
+  -- Everything is fine, let's starting the purge again
+  writeTVar purgeEnabled True
+  -- Put the item back if there's any
+  readTVar eventInHand >>= maybe nop (unGetTQueue eventQueue)
+  -- Get the contents
+  map path <$> flushTQueue eventQueue
 
 -- |Stop watching. Undefined behaviour if called twice.
 stopWatch :: Trash -> Watch -> IO ()
