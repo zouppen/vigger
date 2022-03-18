@@ -38,7 +38,7 @@ startCapture Watch{..} = writeTVar purgeEnabled False
 stopCapture :: Watch -> STM [ByteString]
 stopCapture Watch{..} = do
   purging <- readTVar purgeEnabled
-  when purging $ throwSTM $ ViggerException "motionStop called without motionStart"
+  when purging $ throwSTM $ ViggerNonFatal "motionStop called without motionStart"
   -- Everything is fine, let's starting the purge again
   writeTVar purgeEnabled True
   -- Put the item back if there's any

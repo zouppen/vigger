@@ -8,8 +8,7 @@ import Data.ByteString.UTF8 (fromString)
 import System.IO.Temp (withSystemTempDirectory, createTempDirectory)
 import Data.Map.Strict (Map, (!?), keys)
 import Data.Foldable (traverse_)
-import Control.Exception (IOException, SomeException, try)
-import Control.Monad (when)
+import Control.Exception (IOException, try, throw)
 
 import Config
 import Watch
@@ -78,49 +77,40 @@ forkCamera Stuff{..} Camera{..} = do
   -- Return handle
   pure CameraOp{..}
 
--- |Command loop
+-- |The loop which is running when the system is operating nominally.
 cmdLoop :: Map String TriggerOp -> IO ()
 cmdLoop w = do
-  cmd <- getCmd
-  cont <- try $ cmdHandle w cmd
-  case cont of
-    Left (ViggerException msg) -> do
+  ret <- try $ cmdHandler w
+  case ret of
+    Left ViggerStop -> putStrLn "Quitting..."
+    Left (ViggerNonFatal msg) -> do
       putStrLn $ "Error while running command: " ++ msg
-      cmdLoop w
-    Right True  -> cmdLoop w -- Continue
-    Right False -> pure ()   -- Stop
+      loop
+    Right _ -> loop
+  where loop = cmdLoop w
 
--- |Process a single command
-cmdHandle :: Map String TriggerOp -> [String] -> IO Bool
-cmdHandle w cmd = case cmd of
-  ["list"] -> do
-    putStr $ unlines $ keys w
-    pure True
-  ["start", key] -> do
-    case w !? key of
+-- |Process a single command. Throws ViggerExceptions.
+cmdHandler :: Map String TriggerOp -> IO ()
+cmdHandler w = do
+  cmd <- getCmd
+  case cmd of
+    ["list"] -> putStr $ unlines $ keys w
+    ["start", key] -> case w !? key of
       Just TriggerOp{..} -> do
         motionStart
         putStrLn $ "Motion started on " ++ key
       Nothing -> putStrLn "Trigger not found"
-    pure True
-  ["stop", key] -> do
-    case w !? key of
+    ["stop", key] -> case w !? key of
       Just TriggerOp{..} -> do
         files <- motionEnd
         putStrLn $ "Motion stopped on " ++ key ++ ". Got files: " ++ show files
       Nothing -> putStrLn "Trigger not found"
-    pure True
-  ["quit"] -> do
-    putStrLn "Quitting"
-    pure False
-  _ -> do
-    putStrLn "Unknown command"
-    pure True
-
+    ["quit"] -> throw ViggerStop
+    _ -> putStrLn "Unknown command"
+                     
 -- |Gets a command and splits it into words. If EOF reached, returns ["quit"].
 getCmd :: IO [String]
 getCmd = do
   line <- try getLine :: IO (Either IOException String)
-  case line of
-    Right a -> pure $ words a
-    Left _ -> pure ["quit"]
+  either (throw ViggerStop) (pure . words) line
+

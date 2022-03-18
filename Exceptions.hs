@@ -2,6 +2,6 @@ module Exceptions where
 
 import Control.Exception
 
-data ViggerException = ViggerException String deriving Show
+data ViggerException = ViggerStop | ViggerNonFatal String deriving Show
 
 instance Exception ViggerException
