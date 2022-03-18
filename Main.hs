@@ -33,12 +33,12 @@ data TriggerOp = TriggerOp { motionStart :: IO ()
                            }
 
 main = do
-  conf@Config{..} <- parseCommandAndConfig
-  print conf
+  Config{..} <- parseCommandAndConfig
   withStuff $ \stuff -> do
     -- Start everything
     triggerOps <- traverse (forkTrigger stuff) triggers
     -- Handle incoming events
+    putStrLn "Up and running..."
     cmdLoop triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps
@@ -94,23 +94,29 @@ cmdHandler :: Map String TriggerOp -> IO ()
 cmdHandler w = do
   cmd <- getCmd
   case cmd of
-    ["list"] -> putStr $ unlines $ keys w
+    ["list"] -> putStr $ unlines $ map ("- " ++)  $ keys w
     ["start", key] -> case w !? key of
       Just TriggerOp{..} -> do
         motionStart
         putStrLn $ "Motion started on " ++ key
-      Nothing -> putStrLn "Trigger not found"
+      Nothing -> putStrLn errMsg
     ["stop", key] -> case w !? key of
       Just TriggerOp{..} -> do
         files <- motionEnd
         putStrLn $ "Motion stopped on " ++ key ++ ". Got files: " ++ show files
-      Nothing -> putStrLn "Trigger not found"
+      Nothing -> putStrLn errMsg
+    ["help"] -> putStr $ unlines
+      [ "  list: Lists all triggers"
+      , "  start TRIGGER: Start motion"
+      , "  stop TRIGGER: Stop motion"
+      , "  quit: Quit. Ctrl+D also works."
+      ]
     ["quit"] -> throw ViggerStop
-    _ -> putStrLn "Unknown command"
+    _ -> putStrLn "Unknown command. Type \"help\" to see list of commands"
+  where errMsg = "Trigger not found. Type \"list\" to see them all"
                      
 -- |Gets a command and splits it into words. If EOF reached, returns ["quit"].
 getCmd :: IO [String]
 getCmd = do
   line <- try getLine :: IO (Either IOException String)
   either (throw ViggerStop) (pure . words) line
-
