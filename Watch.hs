@@ -15,6 +15,7 @@ import Foreign.C.Types (CTime)
 import Control.Concurrent (ThreadId, forkIO, killThread)
 import Control.Concurrent.STM
 import Control.Monad (when, forever, guard)
+import Data.Foldable (traverse_)
 
 import Exceptions
 import Trasher (Trash)
@@ -36,24 +37,27 @@ startCapture Watch{..} = writeTVar purgeEnabled False
 
 -- |Stop capture, returns file names
 stopCapture :: Watch -> STM [ByteString]
-stopCapture Watch{..} = do
+stopCapture watch@Watch{..} = do
   purging <- readTVar purgeEnabled
   when purging $ throwSTM $ ViggerNonFatal "motionStop called without motionStart"
   -- Everything is fine, let's starting the purge again
   writeTVar purgeEnabled True
-  -- Put the item back if there's any
-  readTVar eventInHand >>= maybe nop (unGetTQueue eventQueue)
   -- Get the contents
-  map path <$> flushTQueue eventQueue
+  takeFiles watch
 
 -- |Stop watching. Undefined behaviour if called twice.
 stopWatch :: Trash -> Watch -> IO ()
-stopWatch trash Watch{..} = do
+stopWatch trash watch@Watch{..} = do
   removeWatch watchDesc
   killThread purgeThread
-  atomically $ do
-    readTVar eventInHand >>= maybe nop (trash . path)
-    flushTQueue eventQueue >>= mapM_ (trash . path)
+  atomically $ takeFiles watch >>= traverse_ trash
+
+-- |Takes files from the queue. Not for external use!
+takeFiles :: Watch -> STM [ByteString]
+takeFiles Watch{..} = do
+  events <- glue <$> flushTQueue eventQueue <*> readTVar eventInHand
+  pure $ map path events
+  where glue a = maybe a (:a)
 
 -- |Start watching given directory with wiven purge timeout.
 forkWatch :: Trash -> CTime -> INotify -> ByteString -> IO Watch
