@@ -29,6 +29,7 @@ data Watch = Watch { eventQueue   :: TQueue FileEvent
                    , purgeEnabled :: TVar Bool
                    , watchDesc    :: WatchDescriptor
                    , purgeThread  :: ThreadId
+                   , lastEnqueue  :: IO EpochTime
                    }
 
 -- |Start capture
@@ -64,7 +65,10 @@ forkWatch :: Trash -> CTime -> INotify -> ByteString -> IO Watch
 forkWatch trash maxAge ih dir = do
   eventQueue <- newTQueueIO
   eventInHand <- newTVarIO Nothing
-  purgeEnabled <- newTVarIO True -- Motion stopped at start  
+  purgeEnabled <- newTVarIO True -- Motion stopped at start
+  -- Initialize dead man switch with current time
+  lastEnqueueVar <- epochTime >>= newTVarIO
+  let lastEnqueue = readTVarIO lastEnqueueVar
   purgeThread <- forkIO $ forever $ purgeEvent
     maxAge
     trash
@@ -73,7 +77,9 @@ forkWatch trash maxAge ih dir = do
     (readTVar purgeEnabled)
   watchDesc <- watchClosures ih dir $ \path -> do
     time <- epochTime
-    atomically $ writeTQueue eventQueue $ FileEvent{..}
+    atomically $ do
+      writeTQueue eventQueue FileEvent{..}
+      writeTVar lastEnqueueVar time
   pure Watch{..}
 
 -- |Watch given directory, enqueuing closed files as they occur.
