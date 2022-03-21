@@ -3,7 +3,6 @@ module Watch ( Watch(..)
              , startCapture
              , stopCapture
              , forkWatch
-             , stopWatch
              ) where
 
 import Data.ByteString (ByteString)
@@ -29,9 +28,11 @@ data Watch = Watch
   { eventQueue   :: TQueue FileEvent       -- ^Queue holding events ("ring buffer")
   , eventInHand  :: TVar (Maybe FileEvent) -- ^Currently processed event
   , purgeEnabled :: TVar Bool              -- ^Is file removing active
-  , watchDesc    :: WatchDescriptor        -- ^INotify handle
-  , purgeThread  :: ThreadId               -- ^Processing thread ID
-  , lastEnqueue  :: IO EpochTime           -- ^Action returning last incoming event time
+  , lastEnqueue  :: IO EpochTime           -- ^Action returning last
+                                           -- incoming event time.
+  , stopWatch    :: IO ()                  -- ^Stop watch. Doesn't
+                                           -- remove files. Do not
+                                           -- call twice.
   }
 
 -- |Start capture
@@ -47,13 +48,6 @@ stopCapture watch@Watch{..} = do
   writeTVar purgeEnabled True
   -- Get the contents
   takeFiles watch
-
--- |Stop watching. Doesn't remove files. Undefined behaviour if called
--- multiple times.
-stopWatch :: Watch -> IO ()
-stopWatch Watch{..} = do
-  removeWatch watchDesc
-  killThread purgeThread
 
 -- |Takes files from the queue. Not for external use!
 takeFiles :: Watch -> STM [FilePath]
@@ -84,6 +78,9 @@ forkWatch trash maxAge ih dir = do
     atomically $ do
       writeTQueue eventQueue FileEvent{..}
       writeTVar lastEnqueueVar time
+  let stopWatch = do
+        removeWatch watchDesc
+        killThread purgeThread
   pure Watch{..}
 
 -- |Watch given directory, enqueuing closed files as they occur.
