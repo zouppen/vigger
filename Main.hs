@@ -5,10 +5,11 @@ import qualified Data.ByteString as B
 import System.INotify
 import Control.Concurrent.STM
 import System.IO.Temp (withSystemTempDirectory, createTempDirectory)
-import Data.Map.Strict (Map, (!?), keys)
+import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
 import Data.Foldable (traverse_)
 import Control.Exception (IOException, try, throw)
 import Control.Concurrent (killThread, forkIO)
+import System.Posix.Types (EpochTime)
 
 import Config
 import Watch
@@ -30,6 +31,7 @@ data CameraOp = CameraOp { watch        :: Watch
 data TriggerOp = TriggerOp { motionStart :: IO ()
                            , motionEnd   :: IO (Map String [FilePath])
                            , shutdown    :: IO ()
+                           , cameraState :: IO (Map String EpochTime)
                            }
 
 main = do
@@ -62,6 +64,7 @@ forkTrigger stuff Trigger{..} = do
         splitterStop
         -- Stop watches
         stopWatch watch
+      cameraState = traverse (lastEnqueue . watch) ops
   pure TriggerOp{..}
 
 -- |Fork video splitter and cleaner for an individual camera.
@@ -113,16 +116,23 @@ cmdHandler w = do
         files <- motionEnd
         putStrLn $ "Motion stopped on " ++ key ++ ". Got files: " ++ show files
       Nothing -> putStrLn errMsg
+    ["cameras"] -> traverse cameraState w >>= putStr . formatCameraStates
     ["help"] -> putStr $ unlines
       [ "  list: Lists all triggers"
       , "  start TRIGGER: Start motion"
       , "  stop TRIGGER: Stop motion"
+      , "  cameras: Print timestamps of last camera video fragments"
       , "  quit: Quit. Ctrl+D also works."
       ]
     ["quit"] -> throw ViggerStop
     _ -> putStrLn "Unknown command. Type \"help\" to see list of commands"
   where errMsg = "Trigger not found. Type \"list\" to see them all"
-                     
+
+formatCameraStates :: Map String (Map String EpochTime) -> String
+formatCameraStates = foldlWithKey formatTrigger ""
+  where formatTrigger a k m = a <> "  " <> k <> ":\n" <> foldlWithKey formatState "" m
+        formatState a k v = a <> "    " <> k <> ": " <> show v <> "\n"
+
 -- |Gets a command and splits it into words. If EOF reached, returns ["quit"].
 getCmd :: IO [String]
 getCmd = do
