@@ -66,7 +66,7 @@ forkWatch trash maxAge ih = do
   eventInHand <- newTVarIO Nothing
   purgeEnabled <- newTVarIO True -- Motion stopped at start
   -- Initialize dead man switch with current time
-  lastEnqueueVar <- epochTime >>= newTVarIO
+  lastEnqueueVar <- newTVarIO 0
   let lastEnqueue = readTVarIO lastEnqueueVar
   (purgeThread, workDir) <- forkWithTempDir $ const $ forever $ purgeEvent
     maxAge
