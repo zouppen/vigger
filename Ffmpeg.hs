@@ -12,14 +12,14 @@ stopVideoSplit h = do
 -- |Start splitting the video and output to given directory
 startVideoSplit :: FilePath -> String -> IO ProcessHandle
 startVideoSplit dir video = do
-  (_, _, _, h) <- createProcess $ ffmpegProc dir video
+  (_, _, _, h) <- createProcess $ ffmpegSplitProc dir video
   pure h
 
-ffmpegProc :: FilePath -> String -> CreateProcess
-ffmpegProc dir video = p{ cwd = Just dir
-                        , std_in = NoStream
-                        , close_fds = True
-                        }
+ffmpegSplitProc :: FilePath -> String -> CreateProcess
+ffmpegSplitProc dir video = p{ cwd = Just dir
+                             , std_in = NoStream
+                             , close_fds = True
+                             }
   where p = proc "ffmpeg" [ "-y", "-nostdin"
                           , "-rtsp_transport", "tcp"
                           , "-loglevel", "warning"
