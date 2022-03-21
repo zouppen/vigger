@@ -1,12 +1,13 @@
 module Trasher where
 
-import Data.ByteString (ByteString)
+import System.FilePath.ByteString (RawFilePath)
 import System.Posix.Files.ByteString (removeLink)
 import Control.Concurrent (ThreadId, forkIO, killThread)
 import Control.Concurrent.STM
 import Control.Monad (forever, guard)
+import Data.Foldable (traverse_)
 
-type Trash = ByteString -> STM ()
+type Trash = RawFilePath -> STM ()
 
 -- |Create queue which just removes everything sent there 
 runTrasher :: IO (ThreadId, Trash)
@@ -18,6 +19,10 @@ runTrasher = do
       flushTQueue q
     mapM_ removeLink list
   pure (tid, writeTQueue q)
+
+-- |Send list of files to trasher
+trashIO :: Foldable t => Trash -> t RawFilePath -> IO ()
+trashIO trash = atomically . traverse_ trash
 
 -- |Run trasher and kill thread when the action is finished
 withTrasher :: (Trash -> IO ()) -> IO ()
