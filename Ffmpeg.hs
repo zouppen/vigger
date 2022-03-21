@@ -15,8 +15,7 @@ import Exceptions
 -- ViggerException in case FFmpeg returns non-zero return value.
 composeVideo :: Foldable t => FilePath -> t RawFilePath -> IO ()
 composeVideo outfile infiles = withSystemTempFile "vigger" $ \path h -> do
-  p <- runFfmpeg Nothing [ "-y", "-nostdin"
-                         , "-loglevel", "warning"
+  p <- runFfmpeg Nothing [ "-loglevel", "warning"
                          , "-f", "concat"
                          , "-safe", "0"
                          , "-i", path
@@ -44,8 +43,7 @@ stopVideoSplit h = do
 -- |Start splitting the video and output to given directory
 startVideoSplit :: FilePath -> String -> IO ProcessHandle
 startVideoSplit dir video = runFfmpeg (Just dir)
-  [ "-y", "-nostdin"
-  , "-rtsp_transport", "tcp"
+  [ "-rtsp_transport", "tcp"
   , "-loglevel", "warning"
   , "-i", video
   , "-f", "segment"
@@ -58,7 +56,8 @@ runFfmpeg :: Maybe FilePath -> [String] -> IO ProcessHandle
 runFfmpeg cwd args = do
   (_, _, _, h) <- createProcess cp
   pure h
-  where cp = (proc "ffmpeg" args){ cwd = cwd
-                                 , std_in = NoStream
-                                 , close_fds = True
-                                 }
+  where cp = (proc "ffmpeg" argsFull){ cwd = cwd
+                                     , std_in = NoStream
+                                     , close_fds = True
+                                     }
+        argsFull = "-y" : "-nostdin" : args
