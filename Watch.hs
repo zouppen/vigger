@@ -65,7 +65,7 @@ forkWatch trash maxAge ih = do
   eventQueue <- newTQueueIO
   eventInHand <- newTVarIO Nothing
   purgeEnabled <- newTVarIO True -- Motion stopped at start
-  -- Initialize dead man switch with current time
+  -- Initialize dead man switch
   lastEnqueueVar <- newTVarIO 0
   let lastEnqueue = readTVarIO lastEnqueueVar
   (purgeThread, workDir) <- forkWithTempDir $ const $ forever $ purgeEvent
@@ -122,7 +122,7 @@ purgeEvent maxAge trash get hold purgeEnabled = do
     let expiresIn = time - now + maxAge
     delayGuard $ 1000000 * fromEnum expiresIn
 
-  -- File removal at expiration time or falltrough
+  -- File removal at expiration time or fallthrough
   atomically $ do
     enabled <- purgeEnabled
     when enabled $ do
