@@ -9,12 +9,14 @@ import System.IO.Temp (withSystemTempDirectory, createTempDirectory)
 import Data.Map.Strict (Map, (!?), keys)
 import Data.Foldable (traverse_)
 import Control.Exception (IOException, try, throw)
+import Control.Concurrent (killThread, forkIO)
 
 import Config
 import Watch
 import Trasher
 import Ffmpeg
 import Exceptions
+import Deadman
 
 data Stuff = Stuff { ih     :: INotify
                    , trash  :: Trash
@@ -22,8 +24,8 @@ data Stuff = Stuff { ih     :: INotify
                    }
 
 -- |Camera consists of video splitter and file watcher
-data CameraOp = CameraOp { watch    :: Watch
-                         , splitter :: ProcessHandle
+data CameraOp = CameraOp { watch        :: Watch
+                         , splitterStop :: IO ()
                          }
 
 -- |Operations for a single trigger.
@@ -60,7 +62,7 @@ forkTrigger stuff Trigger{..} = do
       motionEnd = atomically $ traverse (stopCapture.watch) ops
       shutdown = flip traverse_ ops $ \CameraOp{..} -> do
         -- Stop FFmpeg
-        stopVideoSplit splitter
+        splitterStop
         -- Stop watches
         stopWatch (trash stuff) watch
   pure TriggerOp{..}
@@ -73,7 +75,18 @@ forkCamera Stuff{..} Camera{..} = do
   -- Start change watcher
   watch <- forkWatch trash (toEnum precapture) ih $ fromString dir
   -- Start video splitter with FFmpeg
-  splitter <- startVideoSplit dir url
+  let start = startVideoSplit dir url
+  splitterStop <- case timeout of
+    Just timeout -> do
+      tid <- forkIO $ deadManLoop
+        (toEnum timeout)
+        (lastEnqueue watch)
+        start
+        stopVideoSplit
+      pure $ killThread tid
+    Nothing -> do
+      procH <- start
+      pure $ stopVideoSplit procH
   -- Return handle
   pure CameraOp{..}
 

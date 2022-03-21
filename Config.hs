@@ -32,9 +32,14 @@ data Config = Config { triggers :: Map String Trigger
 data Trigger = Trigger { cameras :: Map String Camera
                        } deriving (Show, Generic)
 
-data Camera = Camera { url        :: String
-                     , precapture :: Int
-                     } deriving (Show, Generic)
+data Camera = Camera
+  { url        :: String    -- ^Video source of the camera. May be
+                            -- anything supported by FFmpeg.
+  , precapture :: Int       -- ^How many seconds of prerecorded video
+                            -- to keep in case of motion detection
+  , timeout    :: Maybe Int -- ^Timeout in seconds. If Nothing, then
+                            -- no dead man switch used
+  } deriving (Show, Generic)
 
 instance FromJSON Config where
    parseJSON = genericParseJSON strictOptions
