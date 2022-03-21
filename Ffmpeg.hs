@@ -1,5 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Ffmpeg (startVideoSplit, stopVideoSplit, ProcessHandle) where
+module Ffmpeg ( startVideoSplit
+              , stopVideoSplit
+              , composeVideo
+              , ProcessHandle
+              ) where
 
 import System.IO
 import System.Process
