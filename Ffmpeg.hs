@@ -14,7 +14,7 @@ import Exceptions
 -- |Concatenates video using FFmpeg concat demuxer. May throw
 -- ViggerException in case FFmpeg returns non-zero return value.
 composeVideo :: Foldable t => FilePath -> t RawFilePath -> IO ()
-composeVideo outfile infiles = withSystemTempFile "vigger" $ \path h -> do
+composeVideo outfile infiles = withSystemTempFile "vigger.txt" $ \path h -> do
   p <- runFfmpeg Nothing [ "-loglevel", "warning"
                          , "-f", "concat"
                          , "-safe", "0"
