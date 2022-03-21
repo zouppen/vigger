@@ -71,22 +71,16 @@ forkWatch trash maxAge ih dir = do
     (readTQueue eventQueue)
     (writeTVar eventInHand)
     (readTVar purgeEnabled)
-  let eh = atomically . writeTQueue eventQueue
-  watchDesc <- watchClosures ih eh dir
+  watchDesc <- watchClosures ih dir $ \path -> do
+    time <- epochTime
+    atomically $ writeTQueue eventQueue $ FileEvent{..}
   pure Watch{..}
 
--- |Watch given directory, enqueuing events as they occur.
-watchClosures :: INotify -> (FileEvent -> IO ()) -> ByteString -> IO WatchDescriptor
-watchClosures h sendEvent dir = addWatch h [CloseWrite] dir handleEvent
-  where handleEvent = maybe nop send . toClosedFile
-        send file = eventify dir file >>= sendEvent
-
--- |Convert directory name, file name and current time to FileEvent
-eventify :: ByteString -> ByteString -> IO FileEvent
-eventify dir file = do
-  time <- epochTime
-  let path = B.concat [dir, "/", file]
-  pure FileEvent{..}
+-- |Watch given directory, enqueuing closed files as they occur.
+watchClosures :: INotify -> ByteString -> (ByteString -> IO ()) -> IO WatchDescriptor
+watchClosures h dir send = addWatch h [CloseWrite] dir handleEvent
+  where handleEvent = maybe nop action . toClosedFile
+        action file = send $ B.concat [dir, "/", file]
 
 -- |Converts Event to file name of the closed file or Nothing if it's
 -- something else.
