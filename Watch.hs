@@ -6,8 +6,6 @@ module Watch ( Watch(stopWatch, lastEnqueue, workDir)
              , FileEvent(..)
              ) where
 
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as B
 import System.INotify
 import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
@@ -23,7 +21,7 @@ import Trasher (Trash)
 import Temporary
 
 data FileEvent = FileEvent { time :: EpochTime
-                           , path :: ByteString
+                           , path :: RawFilePath
                            } deriving (Show)
 
 data Watch = Watch
@@ -89,14 +87,14 @@ forkWatch trash maxAge ih = do
   pure Watch{..}
 
 -- |Watch given directory, enqueuing closed files as they occur.
-watchClosures :: INotify -> ByteString -> (ByteString -> IO ()) -> IO WatchDescriptor
+watchClosures :: INotify -> RawFilePath -> (RawFilePath -> IO ()) -> IO WatchDescriptor
 watchClosures h dir send = addWatch h [CloseWrite] dir handleEvent
   where handleEvent = maybe nop action . toClosedFile
         action file = send $ dir </> file
 
 -- |Converts Event to file name of the closed file or Nothing if it's
 -- something else.
-toClosedFile :: Event -> Maybe ByteString
+toClosedFile :: Event -> Maybe RawFilePath
 toClosedFile Closed{..} = if isDirectory then Nothing else maybeFilePath
 toClosedFile _ = Nothing
 
@@ -104,7 +102,7 @@ toClosedFile _ = Nothing
 -- where an event might be lost if startMotion and stopMotion occur
 -- between two transactions.
 purgeEvent :: CTime
-           -> (ByteString -> STM a)
+           -> (RawFilePath -> STM ())
            -> STM FileEvent
            -> (Maybe FileEvent -> STM ())
            -> STM Bool
