@@ -16,11 +16,9 @@ import Trasher
 import Ffmpeg
 import Exceptions
 import Deadman
-import Temporary
 
 data Stuff = Stuff { ih     :: INotify
                    , trash  :: Trash
-                   , tmpDir :: FilePath
                    }
 
 -- |Camera consists of video splitter and file watcher
@@ -49,9 +47,8 @@ main = do
 withStuff :: (Stuff -> IO ()) -> IO ()
 withStuff act = do
   withINotify $ \ih -> do
-    withSystemTempDirectory "vigger" $ \tmpDir -> do
-      withTrasher $ \trash -> do
-        act Stuff{..}
+    withTrasher $ \trash -> do
+      act Stuff{..}
 
 -- |Fork a trigger, which is be composed of one or more cameras.
 forkTrigger :: Stuff -> Trigger -> IO TriggerOp
@@ -70,12 +67,10 @@ forkTrigger stuff Trigger{..} = do
 -- |Fork video splitter and cleaner for an individual camera.
 forkCamera :: Stuff -> Camera -> IO CameraOp
 forkCamera Stuff{..} Camera{..} = do
-  -- Create temporary directory for files inside the master temp dir.
-  dir <- createTempDirectory tmpDir "camera"
   -- Start change watcher
-  watch <- forkWatch trash (toEnum precapture) ih dir
+  watch <- forkWatch trash (toEnum precapture) ih
   -- Start video splitter with FFmpeg
-  let start = startVideoSplit dir url
+  let start = startVideoSplit (workDir watch) url
   splitterStop <- case timeout of
     Just timeout -> do
       tid <- forkIO $ deadManLoop

@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
-module Watch ( Watch(stopWatch, lastEnqueue)
+module Watch ( Watch(stopWatch, lastEnqueue, workDir)
              , startCapture
              , stopCapture
              , forkWatch
@@ -11,7 +11,7 @@ import System.INotify
 import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
 import Foreign.C.Types (CTime)
-import Control.Concurrent (ThreadId, forkIO, killThread)
+import Control.Concurrent (killThread)
 import Control.Concurrent.STM
 import Control.Monad (when, forever, guard)
 import Data.Foldable (traverse_)
@@ -19,6 +19,7 @@ import System.FilePath.ByteString
 
 import Exceptions
 import Trasher (Trash)
+import Temporary
 
 data FileEvent = FileEvent { time :: EpochTime
                            , path :: ByteString
@@ -33,6 +34,7 @@ data Watch = Watch
   , stopWatch    :: IO ()                  -- ^Stop watch. Doesn't
                                            -- remove files. Do not
                                            -- call twice.
+  , workDir      :: FilePath               -- ^Temporary directory holding the videos
   }
 
 -- |Start capture
@@ -56,16 +58,17 @@ takeFiles Watch{..} = do
   pure $ map (decodeFilePath . path) events
   where glue a = maybe a (:a)
 
--- |Start watching given directory with wiven purge timeout.
-forkWatch :: Trash -> CTime -> INotify -> FilePath -> IO Watch
-forkWatch trash maxAge ih dir = do
+-- |Creates new temporary directory and starts watching closed files
+-- in that directory and purging them after given timeout.
+forkWatch :: Trash -> CTime -> INotify -> IO Watch
+forkWatch trash maxAge ih = do
   eventQueue <- newTQueueIO
   eventInHand <- newTVarIO Nothing
   purgeEnabled <- newTVarIO True -- Motion stopped at start
   -- Initialize dead man switch with current time
   lastEnqueueVar <- epochTime >>= newTVarIO
   let lastEnqueue = readTVarIO lastEnqueueVar
-  purgeThread <- forkIO $ forever $ purgeEvent
+  (purgeThread, workDir) <- forkWithTempDir $ const $ forever $ purgeEvent
     maxAge
     trash
     (readTQueue eventQueue)
@@ -73,7 +76,7 @@ forkWatch trash maxAge ih dir = do
     (readTVar purgeEnabled)
   -- INotify uses RawFilePath internally so we need to convert between
   -- FilePath and RawFilePath here.
-  watchDesc <- watchClosures ih (encodeFilePath dir) $ \path -> do
+  watchDesc <- watchClosures ih (encodeFilePath workDir) $ \path -> do
     time <- epochTime
     atomically $ do
       writeTQueue eventQueue FileEvent{..}
