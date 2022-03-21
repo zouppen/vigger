@@ -3,6 +3,7 @@ module Watch ( Watch(stopWatch, lastEnqueue, workDir)
              , startCapture
              , stopCapture
              , forkWatch
+             , FileEvent(..)
              ) where
 
 import Data.ByteString (ByteString)
@@ -29,7 +30,7 @@ data Watch = Watch
   { eventQueue   :: TQueue FileEvent       -- ^Queue holding events ("ring buffer")
   , eventInHand  :: TVar (Maybe FileEvent) -- ^Currently processed event
   , purgeEnabled :: TVar Bool              -- ^Is file removing active
-  , lastEnqueue  :: IO EpochTime           -- ^Action returning last
+  , lastEnqueue  :: IO FileEvent           -- ^Action returning last
                                            -- incoming event time.
   , stopWatch    :: IO ()                  -- ^Stop watch. Doesn't
                                            -- remove files. Do not
@@ -66,7 +67,7 @@ forkWatch trash maxAge ih = do
   eventInHand <- newTVarIO Nothing
   purgeEnabled <- newTVarIO True -- Motion stopped at start
   -- Initialize dead man switch
-  lastEnqueueVar <- newTVarIO 0
+  lastEnqueueVar <- newTVarIO $ FileEvent 0 ""
   let lastEnqueue = readTVarIO lastEnqueueVar
   (purgeThread, workDir) <- forkWithTempDir $ const $ forever $ purgeEvent
     maxAge
@@ -79,8 +80,9 @@ forkWatch trash maxAge ih = do
   watchDesc <- watchClosures ih (encodeFilePath workDir) $ \path -> do
     time <- epochTime
     atomically $ do
-      writeTQueue eventQueue FileEvent{..}
-      writeTVar lastEnqueueVar time
+      let e = FileEvent{..}
+      writeTQueue eventQueue e
+      writeTVar lastEnqueueVar e
   let stopWatch = do
         removeWatch watchDesc
         killThread purgeThread

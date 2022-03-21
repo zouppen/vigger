@@ -9,7 +9,6 @@ import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
 import Data.Foldable (traverse_)
 import Control.Exception (IOException, try, throw)
 import Control.Concurrent (killThread, forkIO)
-import System.Posix.Types (EpochTime)
 
 import Config
 import Watch
@@ -31,7 +30,7 @@ data CameraOp = CameraOp { watch        :: Watch
 data TriggerOp = TriggerOp { motionStart :: IO ()
                            , motionEnd   :: IO (Map String [FilePath])
                            , shutdown    :: IO ()
-                           , cameraState :: IO (Map String EpochTime)
+                           , cameraState :: IO (Map String FileEvent)
                            }
 
 main = do
@@ -78,7 +77,7 @@ forkCamera Stuff{..} Camera{..} = do
     Just timeout -> do
       tid <- forkIO $ deadManLoop
         (toEnum timeout)
-        (lastEnqueue watch)
+        (time <$> lastEnqueue watch)
         start
         stopVideoSplit
       pure $ killThread tid
@@ -128,10 +127,11 @@ cmdHandler w = do
     _ -> putStrLn "Unknown command. Type \"help\" to see list of commands"
   where errMsg = "Trigger not found. Type \"list\" to see them all"
 
-formatCameraStates :: Map String (Map String EpochTime) -> String
+formatCameraStates :: Map String (Map String FileEvent) -> String
 formatCameraStates = foldlWithKey formatTrigger ""
   where formatTrigger a k m = a <> "  " <> k <> ":\n" <> foldlWithKey formatState "" m
-        formatState a k v = a <> "    " <> k <> ": " <> show v <> "\n"
+        formatState a k v = a <> "    " <> k <> ":\n" <> formatEvent v
+        formatEvent FileEvent{..} =  "      time: "  <> show time <> "\n      path: " <> show path <> "\n"
 
 -- |Gets a command and splits it into words. If EOF reached, returns ["quit"].
 getCmd :: IO [String]
