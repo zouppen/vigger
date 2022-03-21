@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
-module Watch ( Watch(..)
+module Watch ( Watch(stopWatch, lastEnqueue)
              , startCapture
              , stopCapture
              , forkWatch
