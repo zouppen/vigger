@@ -1,7 +1,6 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 module Main where
 
-import qualified Data.ByteString as B
 import System.INotify
 import Control.Concurrent.STM
 import System.IO.Temp (withSystemTempDirectory, createTempDirectory)
@@ -28,7 +27,7 @@ data CameraOp = CameraOp { watch        :: Watch
 
 -- |Operations for a single trigger.
 data TriggerOp = TriggerOp { motionStart :: IO ()
-                           , motionEnd   :: IO (Map String [FilePath])
+                           , motionEnd   :: IO (Map String [RawFilePath])
                            , shutdown    :: IO ()
                            , cameraState :: IO (Map String FileEvent)
                            }

@@ -4,6 +4,7 @@ module Watch ( Watch(stopWatch, lastEnqueue, workDir)
              , stopCapture
              , forkWatch
              , FileEvent(..)
+             , RawFilePath -- re-export
              ) where
 
 import System.INotify
@@ -41,7 +42,7 @@ startCapture :: Watch -> STM ()
 startCapture Watch{..} = writeTVar purgeEnabled False
 
 -- |Stop capture, returns file names
-stopCapture :: Watch -> STM [FilePath]
+stopCapture :: Watch -> STM [RawFilePath]
 stopCapture watch@Watch{..} = do
   purging <- readTVar purgeEnabled
   when purging $ throwSTM $ ViggerNonFatal "motionStop called without motionStart"
@@ -51,10 +52,10 @@ stopCapture watch@Watch{..} = do
   takeFiles watch
 
 -- |Takes files from the queue. Not for external use!
-takeFiles :: Watch -> STM [FilePath]
+takeFiles :: Watch -> STM [RawFilePath]
 takeFiles Watch{..} = do
   events <- glue <$> flushTQueue eventQueue <*> readTVar eventInHand
-  pure $ map (decodeFilePath . path) events
+  pure $ map path events
   where glue a = maybe a (:a)
 
 -- |Creates new temporary directory and starts watching closed files
