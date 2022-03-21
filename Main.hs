@@ -4,7 +4,6 @@ module Main where
 import qualified Data.ByteString as B
 import System.INotify
 import Control.Concurrent.STM
-import Data.ByteString.UTF8 (fromString)
 import System.IO.Temp (withSystemTempDirectory, createTempDirectory)
 import Data.Map.Strict (Map, (!?), keys)
 import Data.Foldable (traverse_)
@@ -17,6 +16,7 @@ import Trasher
 import Ffmpeg
 import Exceptions
 import Deadman
+import Temporary
 
 data Stuff = Stuff { ih     :: INotify
                    , trash  :: Trash
@@ -30,7 +30,7 @@ data CameraOp = CameraOp { watch        :: Watch
 
 -- |Operations for a single trigger.
 data TriggerOp = TriggerOp { motionStart :: IO ()
-                           , motionEnd   :: IO (Map String [B.ByteString])
+                           , motionEnd   :: IO (Map String [FilePath])
                            , shutdown    :: IO ()
                            }
 
@@ -64,7 +64,7 @@ forkTrigger stuff Trigger{..} = do
         -- Stop FFmpeg
         splitterStop
         -- Stop watches
-        stopWatch (trash stuff) watch
+        stopWatch watch
   pure TriggerOp{..}
 
 -- |Fork video splitter and cleaner for an individual camera.
@@ -73,7 +73,7 @@ forkCamera Stuff{..} Camera{..} = do
   -- Create temporary directory for files inside the master temp dir.
   dir <- createTempDirectory tmpDir "camera"
   -- Start change watcher
-  watch <- forkWatch trash (toEnum precapture) ih $ fromString dir
+  watch <- forkWatch trash (toEnum precapture) ih dir
   -- Start video splitter with FFmpeg
   let start = startVideoSplit dir url
   splitterStop <- case timeout of

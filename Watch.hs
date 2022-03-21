@@ -16,6 +16,7 @@ import Control.Concurrent (ThreadId, forkIO, killThread)
 import Control.Concurrent.STM
 import Control.Monad (when, forever, guard)
 import Data.Foldable (traverse_)
+import System.FilePath.ByteString
 
 import Exceptions
 import Trasher (Trash)
@@ -38,7 +39,7 @@ startCapture :: Watch -> STM ()
 startCapture Watch{..} = writeTVar purgeEnabled False
 
 -- |Stop capture, returns file names
-stopCapture :: Watch -> STM [ByteString]
+stopCapture :: Watch -> STM [FilePath]
 stopCapture watch@Watch{..} = do
   purging <- readTVar purgeEnabled
   when purging $ throwSTM $ ViggerNonFatal "motionStop called without motionStart"
@@ -47,22 +48,22 @@ stopCapture watch@Watch{..} = do
   -- Get the contents
   takeFiles watch
 
--- |Stop watching. Undefined behaviour if called twice.
-stopWatch :: Trash -> Watch -> IO ()
-stopWatch trash watch@Watch{..} = do
+-- |Stop watching. Doesn't remove files. Undefined behaviour if called
+-- multiple times.
+stopWatch :: Watch -> IO ()
+stopWatch Watch{..} = do
   removeWatch watchDesc
   killThread purgeThread
-  atomically $ takeFiles watch >>= traverse_ trash
 
 -- |Takes files from the queue. Not for external use!
-takeFiles :: Watch -> STM [ByteString]
+takeFiles :: Watch -> STM [FilePath]
 takeFiles Watch{..} = do
   events <- glue <$> flushTQueue eventQueue <*> readTVar eventInHand
-  pure $ map path events
+  pure $ map (decodeFilePath . path) events
   where glue a = maybe a (:a)
 
 -- |Start watching given directory with wiven purge timeout.
-forkWatch :: Trash -> CTime -> INotify -> ByteString -> IO Watch
+forkWatch :: Trash -> CTime -> INotify -> FilePath -> IO Watch
 forkWatch trash maxAge ih dir = do
   eventQueue <- newTQueueIO
   eventInHand <- newTVarIO Nothing
@@ -76,7 +77,9 @@ forkWatch trash maxAge ih dir = do
     (readTQueue eventQueue)
     (writeTVar eventInHand)
     (readTVar purgeEnabled)
-  watchDesc <- watchClosures ih dir $ \path -> do
+  -- INotify uses RawFilePath internally so we need to convert between
+  -- FilePath and RawFilePath here.
+  watchDesc <- watchClosures ih (encodeFilePath dir) $ \path -> do
     time <- epochTime
     atomically $ do
       writeTQueue eventQueue FileEvent{..}
@@ -87,7 +90,7 @@ forkWatch trash maxAge ih dir = do
 watchClosures :: INotify -> ByteString -> (ByteString -> IO ()) -> IO WatchDescriptor
 watchClosures h dir send = addWatch h [CloseWrite] dir handleEvent
   where handleEvent = maybe nop action . toClosedFile
-        action file = send $ B.concat [dir, "/", file]
+        action file = send $ dir </> file
 
 -- |Converts Event to file name of the closed file or Nothing if it's
 -- something else.
