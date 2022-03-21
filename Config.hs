@@ -37,8 +37,9 @@ data Camera = Camera
                             -- anything supported by FFmpeg.
   , precapture :: Int       -- ^How many seconds of prerecorded video
                             -- to keep in case of motion detection
-  , timeout    :: Maybe Int -- ^Timeout in seconds. If Nothing, then
-                            -- no dead man switch used
+  , timeout    :: Maybe Int -- ^Timeout in seconds (max interval
+                            -- between keyframes). If Nothing, then no
+                            -- dead man switch used
   } deriving (Show, Generic)
 
 instance FromJSON Config where

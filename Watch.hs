@@ -24,13 +24,14 @@ data FileEvent = FileEvent { time :: EpochTime
                            , path :: ByteString
                            } deriving (Show)
 
-data Watch = Watch { eventQueue   :: TQueue FileEvent
-                   , eventInHand  :: TVar (Maybe FileEvent)
-                   , purgeEnabled :: TVar Bool
-                   , watchDesc    :: WatchDescriptor
-                   , purgeThread  :: ThreadId
-                   , lastEnqueue  :: IO EpochTime
-                   }
+data Watch = Watch
+  { eventQueue   :: TQueue FileEvent       -- ^Queue holding events ("ring buffer")
+  , eventInHand  :: TVar (Maybe FileEvent) -- ^Currently processed event
+  , purgeEnabled :: TVar Bool              -- ^Is file removing active
+  , watchDesc    :: WatchDescriptor        -- ^INotify handle
+  , purgeThread  :: ThreadId               -- ^Processing thread ID
+  , lastEnqueue  :: IO EpochTime           -- ^Action returning last incoming event time
+  }
 
 -- |Start capture
 startCapture :: Watch -> STM ()
