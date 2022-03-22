@@ -90,4 +90,4 @@ parseCommandAndConfig = do
 yamlError :: String -> Either ParseException a -> IO a
 yamlError _ (Right a) = pure a
 yamlError name (Left e)  = die $
-  "Error while reading " ++ name ++ ":\n" ++ prettyPrintParseException e
+  "Error while reading " <> name <> ":\n" <> prettyPrintParseException e

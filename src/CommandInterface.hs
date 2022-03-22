@@ -21,7 +21,7 @@ cli w = fix $ \loop -> do
   case ret of
     Left ViggerStop -> putStrLn "Quitting..."
     Left (ViggerNonFatal msg) -> do
-      putStrLn $ "Error while running command: " ++ msg
+      putStrLn $ "Error while running command: " <> msg
       loop
     Right _ -> loop
 
@@ -30,11 +30,11 @@ cmdHandler :: Map String TriggerOp -> IO ()
 cmdHandler w = do
   cmd <- getCmd
   case cmd of
-    ["list"] -> putStr $ unlines $ map ("- " ++)  $ keys w
+    ["list"] -> putStr $ unlines $ map ("- " <>) $ keys w
     ["start", key] -> case w !? key of
       Just TriggerOp{..} -> do
         motionStart
-        putStrLn $ "Motion started on " ++ key
+        putStrLn $ "Motion started on " <> key
       Nothing -> putStrLn errMsg
     ["stop", key] -> case w !? key of
       Just TriggerOp{..} -> do
@@ -45,7 +45,7 @@ cmdHandler w = do
           composeVideo outfile captureFiles
           atomically captureClean
           pure outfile
-        putStrLn $ "Motion stopped on " ++ key ++ ". Got videos: " ++ show videos
+        putStrLn $ "Motion stopped on " <> key <> ". Got videos: " <> show videos
       Nothing -> putStrLn errMsg
     ["cameras"] -> traverse cameraState w >>= putStr . formatCameraStates
     ["help"] -> putStr $ unlines
