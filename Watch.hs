@@ -16,8 +16,8 @@ import Control.Concurrent (killThread, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (when, forever, guard)
 import Data.Foldable (traverse_)
-import Data.Maybe (isJust)
 import System.FilePath.ByteString
+import Control.Applicative
 
 import Exceptions
 import Trasher (Trash)
@@ -35,7 +35,7 @@ data Capture = Capture
 
 data Watch = Watch
   { eventQueue   :: TQueue FileEvent       -- ^Queue holding events ("ring buffer")
-  , eventInHand  :: TVar (Maybe FileEvent) -- ^Currently processed event
+  , eventInHand  :: TMVar FileEvent        -- ^Currently processed event
   , purgeEnabled :: TVar Bool              -- ^Is file removing active
   , lastEnqueue  :: IO FileEvent           -- ^Action returning last
                                            -- incoming event time.
@@ -49,8 +49,8 @@ data Watch = Watch
 -- |Start capture
 startCapture :: Watch -> STM ()
 startCapture Watch{..} = do
-  -- Remove the item in hand if it is
-  readTVar eventInHand >>= maybe nop (unGetTQueue eventQueue)
+  -- Remove the item from hand if there's any
+  noRetry $ takeTMVar eventInHand >>= unGetTQueue eventQueue
   -- Stop the purge
   writeTVar purgeEnabled False
 
@@ -71,7 +71,7 @@ stopCapture watch@Watch{..} = do
 forkWatch :: Trash -> CTime -> INotify -> IO Watch
 forkWatch trash maxAge ih = do
   eventQueue <- newTQueueIO
-  eventInHand <- newTVarIO Nothing
+  eventInHand <- newEmptyTMVarIO
   purgeEnabled <- newTVarIO True -- Motion stopped at start
   -- Initialize dead man switch
   lastEnqueueVar <- newTVarIO $ FileEvent 0 ""
@@ -103,9 +103,7 @@ toClosedFile :: Event -> Maybe RawFilePath
 toClosedFile Closed{..} = if isDirectory then Nothing else maybeFilePath
 toClosedFile _ = Nothing
 
--- |Purge old file if we have permission to do so. Has a problem in
--- where an event might be lost if startMotion and stopMotion occur
--- between two transactions.
+-- |Purge old file if we have permission to do so.
 purgeEvent :: CTime -> Watch -> IO ()
 purgeEvent maxAge Watch{..} = do
   FileEvent{..} <- atomically $ do
@@ -113,7 +111,7 @@ purgeEvent maxAge Watch{..} = do
     readTVar purgeEnabled >>= guard
     -- Take one item and place it to "hand" to avoid race conditions.
     a <- readTQueue eventQueue
-    writeTVar eventInHand $ Just a
+    putTMVar eventInHand a
     pure a
 
   -- Sleep until it should expire
@@ -123,13 +121,15 @@ purgeEvent maxAge Watch{..} = do
     when (expiresIn > 0) $ threadDelay $ 1000000 * fromEnum expiresIn
 
   -- If we have the event still in hand, it should be
-  -- removed. Otherwise fallthrough.
-  atomically $ do
-    enabled <- isJust <$> readTVar eventInHand
-    when enabled $ do
-      trash path
-      writeTVar eventInHand Nothing
+  -- removed. Otherwise we keep the file.
+  atomically $ noRetry $ do
+    takeTMVar eventInHand
+    trash path
 
 -- |Shorthand for doing nothing
 nop :: Applicative m => m ()
 nop = pure ()
+
+-- |No retry in case transaction retries.
+noRetry :: Alternative f => f () -> f ()
+noRetry act = act <|> nop 
