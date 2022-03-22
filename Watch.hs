@@ -34,16 +34,15 @@ data Capture = Capture
   }
 
 data Watch = Watch
-  { eventQueue   :: TQueue FileEvent       -- ^Queue holding events ("ring buffer")
-  , eventInHand  :: TMVar FileEvent        -- ^Currently processed event
-  , purgeEnabled :: TVar Bool              -- ^Is file removing active
-  , lastEnqueue  :: IO FileEvent           -- ^Action returning last
-                                           -- incoming event time.
-  , trash        :: Trash                  -- ^File remover
-  , stopWatch    :: IO ()                  -- ^Stop watch. Doesn't
-                                           -- remove files. Do not
-                                           -- call twice.
-  , workDir      :: FilePath               -- ^Temporary directory holding the videos
+  { eventQueue   :: TQueue FileEvent -- ^Queue holding events ("ring buffer")
+  , eventInHand  :: TMVar FileEvent  -- ^Currently processed event
+  , purgeEnabled :: TVar Bool        -- ^Is file removing active
+  , lastEnqueue  :: IO FileEvent     -- ^Action returning last
+                                     -- incoming event time.
+  , trash        :: Trash            -- ^File remover
+  , stopWatch    :: IO ()            -- ^Stop watch. Doesn't remove
+                                     -- files. Do not call twice.
+  , workDir      :: FilePath         -- ^Temporary directory holding the videos
   }
 
 -- |Start capture
