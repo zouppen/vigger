@@ -11,10 +11,11 @@ import System.INotify
 import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
 import Foreign.C.Types (CTime)
-import Control.Concurrent (killThread)
+import Control.Concurrent (killThread, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (when, forever, guard)
 import Data.Foldable (traverse_)
+import Data.Maybe (isJust)
 import System.FilePath.ByteString
 
 import Exceptions
@@ -40,7 +41,11 @@ data Watch = Watch
 
 -- |Start capture
 startCapture :: Watch -> STM ()
-startCapture Watch{..} = writeTVar purgeEnabled False
+startCapture Watch{..} = do
+  -- Remove the item in hand if it is
+  readTVar eventInHand >>= maybe nop (unGetTQueue eventQueue)
+  -- Stop the purge
+  writeTVar purgeEnabled False
 
 -- |Stop capture, returns file names
 stopCapture :: Watch -> STM [RawFilePath]
@@ -49,15 +54,8 @@ stopCapture watch@Watch{..} = do
   when purging $ throwSTM $ ViggerNonFatal "motionStop called without motionStart"
   -- Everything is fine, let's starting the purge again
   writeTVar purgeEnabled True
-  -- Get the contents
-  takeFiles watch
-
--- |Takes files from the queue. Not for external use!
-takeFiles :: Watch -> STM [RawFilePath]
-takeFiles Watch{..} = do
-  events <- glue <$> flushTQueue eventQueue <*> readTVar eventInHand
-  pure $ map path events
-  where glue a = maybe a (:a)
+  -- Empty the event queue to a list
+  map path <$> flushTQueue eventQueue
 
 -- |Creates new temporary directory and starts watching closed files
 -- in that directory and purging them after given timeout.
@@ -109,28 +107,19 @@ purgeEvent maxAge Watch{..} = do
     writeTVar eventInHand $ Just a
     pure a
 
-  -- Create delay action to span over the expiration time
-  delay <- do
+  -- Sleep until it should expire
+  do
     now <- epochTime
     let expiresIn = time - now + maxAge
-    delayGuard $ 1000000 * fromEnum expiresIn
+    when (expiresIn > 0) $ threadDelay $ 1000000 * fromEnum expiresIn
 
-  -- File removal at expiration time or fallthrough
+  -- If we have the event still in hand, it should be
+  -- removed. Otherwise fallthrough.
   atomically $ do
-    enabled <- readTVar purgeEnabled
+    enabled <- isJust <$> readTVar eventInHand
     when enabled $ do
-      -- Ensure delay spent and add item to remove queue and release it.
-      delay
       trash path
       writeTVar eventInHand Nothing
-
--- |Retuns STM action which retries until given timeout reached
-delayGuard :: Int -> IO (STM ())
-delayGuard delay
-  | delay > 0 = do
-      var <- registerDelay delay
-      pure $ readTVar var >>= guard
-  | otherwise = pure nop
 
 -- |Shorthand for doing nothing
 nop :: Applicative m => m ()
