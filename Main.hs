@@ -3,11 +3,11 @@ module Main where
 
 import System.INotify
 import Control.Concurrent.STM
-import System.IO.Temp (withSystemTempDirectory, createTempDirectory)
 import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
 import Data.Foldable (traverse_)
 import Control.Exception (IOException, try, throw)
 import Control.Concurrent (killThread, forkIO)
+import System.IO.Temp (emptySystemTempFile)
 
 import Config
 import Watch
@@ -111,8 +111,13 @@ cmdHandler Stuff{..} w = do
       Nothing -> putStrLn errMsg
     ["stop", key] -> case w !? key of
       Just TriggerOp{..} -> do
-        files <- motionEnd
-        putStrLn $ "Motion stopped on " ++ key ++ ". Got files: " ++ show files
+        -- Encode video and remove files afterwards
+        motion <- motionEnd
+        videos <- flip traverse motion $ \files -> do
+          outfile <- emptySystemTempFile "vigger.mp4"
+          composeVideo outfile files
+          trashIO trash files
+        putStrLn $ "Motion stopped on " ++ key ++ ". Got videos: " ++ show videos
       Nothing -> putStrLn errMsg
     ["cameras"] -> traverse cameraState w >>= putStr . formatCameraStates
     ["help"] -> putStr $ unlines
