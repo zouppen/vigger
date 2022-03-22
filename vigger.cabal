@@ -1,0 +1,42 @@
+cabal-version:       2.4
+name:                vigger
+version:             0.1.0.0
+synopsis:            Video surveillance tool with external trigger support
+description:         Tool for handling video surveillance with external
+                     triggers.
+bug-reports:         https://github.com/zouppen/vigger/issues
+license:             GPL-3.0-or-later
+license-file:        LICENSE
+author:              Joel Lehtonen
+maintainer:          joel.lehtonen@iki.fi
+copyright:           © 2022 Joel Lehtonen
+category:            Video
+extra-source-files:  README.md
+
+executable vigger
+  main-is:             Main.hs
+  other-modules:       Deadman,
+                       Trasher,
+                       Config,
+                       Ffmpeg,
+                       Temporary,
+                       Loader,
+                       CommandInterface,
+                       Exceptions,
+                       Watch
+  other-extensions:    RecordWildCards, OverloadedStrings, DeriveGeneric
+  build-depends:       base ^>=4.13.0.0,
+                       unix ^>=2.7.2.2,
+                       filepath-bytestring ^>=1.4.2.1.6,
+                       stm ^>=2.5.0.0,
+                       containers ^>=0.6.2.1,
+                       yaml ^>=0.11.4.0,
+                       aeson ^>=1.4.7.1,
+                       optparse-applicative ^>=0.15.1.0,
+                       process ^>=1.6.9.0,
+                       bytestring ^>=0.10.10.1,
+                       temporary ^>=1.3,
+                       hinotify ^>=0.4,
+                       async ^>=2.2.2
+  hs-source-dirs:      src
+  default-language:    Haskell2010
