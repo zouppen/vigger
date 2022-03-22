@@ -39,7 +39,7 @@ main = do
     triggerOps <- traverse (forkTrigger stuff) triggers
     -- Handle incoming events
     putStrLn "Up and running..."
-    cmdLoop triggerOps
+    cmdLoop stuff triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps
 
@@ -87,20 +87,20 @@ forkCamera Stuff{..} Camera{..} = do
   pure CameraOp{..}
 
 -- |The loop which is running when the system is operating nominally.
-cmdLoop :: Map String TriggerOp -> IO ()
-cmdLoop w = do
-  ret <- try $ cmdHandler w
+cmdLoop :: Stuff -> Map String TriggerOp -> IO ()
+cmdLoop stuff w = do
+  ret <- try $ cmdHandler stuff w
   case ret of
     Left ViggerStop -> putStrLn "Quitting..."
     Left (ViggerNonFatal msg) -> do
       putStrLn $ "Error while running command: " ++ msg
       loop
     Right _ -> loop
-  where loop = cmdLoop w
+  where loop = cmdLoop stuff w
 
 -- |Process a single command. Throws ViggerExceptions.
-cmdHandler :: Map String TriggerOp -> IO ()
-cmdHandler w = do
+cmdHandler :: Stuff -> Map String TriggerOp -> IO ()
+cmdHandler Stuff{..} w = do
   cmd <- getCmd
   case cmd of
     ["list"] -> putStr $ unlines $ map ("- " ++)  $ keys w
