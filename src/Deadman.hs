@@ -6,20 +6,19 @@ import Control.Exception (bracket)
 import Control.Monad (when, forever)
 import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
+import Data.Function (fix)
 
 -- |Dead man switch. It takes timeout and an action to retrieve
 -- last action time. This function returns when more than number of
 -- timeout seconds have elapsed after last action time.
 awaitDeadline :: EpochTime -> IO EpochTime -> IO ()
-awaitDeadline timeout getLastActionTime =
-  let loop = do
-        now <- epochTime
-        last <- getLastActionTime
-        let target = last + timeout - now
-        when (target > 0) $ do
-          threadDelay $ 1000000 * fromEnum target
-          loop
-  in loop
+awaitDeadline timeout getLastActionTime = fix $ \loop -> do
+  now <- epochTime
+  last <- getLastActionTime
+  let target = last + timeout - now
+  when (target > 0) $ do
+    threadDelay $ 1000000 * fromEnum target
+    loop
 
 -- |Dead man switch loop. It takes timeout, an action to retrieve last
 -- action time and actions for starting and stopping the action. If
