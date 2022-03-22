@@ -5,9 +5,9 @@ import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
 import Control.Exception (IOException, try, throw)
 import System.IO.Temp (emptySystemTempFile)
 import Control.Concurrent.STM (atomically)
+import Control.Concurrent.Async (forConcurrently)
 
 import Watch
-import Trasher
 import Ffmpeg
 import Exceptions
 import Loader
@@ -39,7 +39,7 @@ cmdHandler w = do
       Just TriggerOp{..} -> do
         -- Encode video and remove files afterwards
         motion <- motionEnd
-        videos <- flip traverse motion $ \Capture{..} -> do
+        videos <- forConcurrently motion $ \Capture{..} -> do
           outfile <- emptySystemTempFile "vigger.mp4"
           composeVideo outfile captureFiles
           atomically captureClean
