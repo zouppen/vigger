@@ -13,7 +13,7 @@ main = do
     triggerOps <- initTriggers config stuff
     -- Handle incoming events
     putStrLn "Up and running..."
-    cmdLoop stuff triggerOps
+    cmdLoop triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps
 

@@ -13,20 +13,20 @@ import Exceptions
 import Loader
 
 -- |The loop which is running when the system is operating nominally.
-cmdLoop :: Stuff -> Map String TriggerOp -> IO ()
-cmdLoop stuff w = do
-  ret <- try $ cmdHandler stuff w
+cmdLoop :: Map String TriggerOp -> IO ()
+cmdLoop w = do
+  ret <- try $ cmdHandler w
   case ret of
     Left ViggerStop -> putStrLn "Quitting..."
     Left (ViggerNonFatal msg) -> do
       putStrLn $ "Error while running command: " ++ msg
       loop
     Right _ -> loop
-  where loop = cmdLoop stuff w
+  where loop = cmdLoop w
 
 -- |Process a single command. Throws ViggerExceptions.
-cmdHandler :: Stuff -> Map String TriggerOp -> IO ()
-cmdHandler Stuff{..} w = do
+cmdHandler :: Map String TriggerOp -> IO ()
+cmdHandler w = do
   cmd <- getCmd
   case cmd of
     ["list"] -> putStr $ unlines $ map ("- " ++)  $ keys w
