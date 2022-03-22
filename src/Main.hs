@@ -8,12 +8,15 @@ import Loader
 import Config
 
 main = do
-  config <- parseCommandAndConfig
+  Options{..} <- parseCommandAndConfig
   withStuff $ \stuff -> do
     triggerOps <- initTriggers config stuff
     -- Handle incoming events
     putStrLn "Up and running..."
-    cmdLoop triggerOps
+    case interface of
+      Cli -> cli triggerOps
+      Unit name -> do
+        putStrLn $ "Systemd unit not yet supported. " <> name
     -- Shutting down operations
     traverse_ shutdown triggerOps
 

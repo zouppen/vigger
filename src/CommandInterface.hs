@@ -1,11 +1,12 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
-module CommandInterface (cmdLoop) where
+module CommandInterface (cli) where
 
 import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
 import Control.Exception (IOException, try, throw)
 import System.IO.Temp (emptySystemTempFile)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.Async (forConcurrently)
+import Data.Function (fix)
 
 import Watch
 import Ffmpeg
@@ -13,8 +14,9 @@ import Exceptions
 import Loader
 
 -- |The loop which is running when the system is operating nominally.
-cmdLoop :: Map String TriggerOp -> IO ()
-cmdLoop w = do
+cli :: Map String TriggerOp -> IO ()
+cli w = fix $ \loop -> do
+  putStrLn "Vigger command line interface. Type \"help\" for instructions"
   ret <- try $ cmdHandler w
   case ret of
     Left ViggerStop -> putStrLn "Quitting..."
@@ -22,7 +24,6 @@ cmdLoop w = do
       putStrLn $ "Error while running command: " ++ msg
       loop
     Right _ -> loop
-  where loop = cmdLoop w
 
 -- |Process a single command. Throws ViggerExceptions.
 cmdHandler :: Map String TriggerOp -> IO ()

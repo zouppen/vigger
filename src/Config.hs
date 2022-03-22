@@ -1,7 +1,9 @@
 {-# LANGUAGE RecordWildCards, DeriveGeneric #-}
 module Config ( Config(..)
+              , Options(..)
               , Trigger(..)
               , Camera(..)
+              , Interface(..)
               , parseCommandAndConfig
               ) where
 
@@ -23,7 +25,8 @@ import System.Exit (die)
 strictOptions = defaultOptions{ rejectUnknownFields = True }
 
 data Options = Options
-  { confFile  :: FilePath
+  { config    :: Config
+  , confFile  :: FilePath
   , interface :: Interface
   } deriving (Show)
 
@@ -56,8 +59,9 @@ instance FromJSON Trigger where
 instance FromJSON Camera where
   parseJSON = genericParseJSON strictOptions
 
+-- |Returns Options parser, leave a hole in the config.
 optParser :: Parser Options
-optParser =  Options <$> config <*> (cli <|> unit)
+optParser = Options undefined <$> config <*> (cli <|> unit)
   where
     config = strOption ( short 'c' <>
                          long "config" <>
@@ -75,10 +79,12 @@ opts = info (optParser <**> helper)
          <> header ("vigger - Video trigger for FFmpeg compatible cameras")
        )
 
-parseCommandAndConfig :: IO Config
+-- |Parses command line options
+parseCommandAndConfig :: IO Options
 parseCommandAndConfig = do
   Options{..} <- execParser opts
-  decodeFileEither confFile >>= yamlError confFile
+  config <- decodeFileEither confFile >>= yamlError confFile
+  pure $ Options{..}
 
 -- |Dies if it has a ParseException or continues execution otherwise.
 yamlError :: String -> Either ParseException a -> IO a
