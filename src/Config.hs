@@ -23,8 +23,13 @@ import System.Exit (die)
 strictOptions = defaultOptions{ rejectUnknownFields = True }
 
 data Options = Options
-  { confFile :: FilePath
+  { confFile  :: FilePath
+  , interface :: Interface
   } deriving (Show)
+
+data Interface = Cli         -- ^Command line interface
+               | Unit String -- ^Systemd journal unit
+               deriving (Show)
 
 data Config = Config { triggers :: Map String Trigger
                      } deriving (Show, Generic)
@@ -52,13 +57,17 @@ instance FromJSON Camera where
   parseJSON = genericParseJSON strictOptions
 
 optParser :: Parser Options
-optParser = Options
-  <$> strOption ( mempty
-                  <> short 'c'
-                  <> long "config"
-                  <> metavar "FILE"
-                  <> help "Configuration file in YAML format"
-                )
+optParser =  Options <$> config <*> (cli <|> unit)
+  where
+    config = strOption ( short 'c' <>
+                         long "config" <>
+                         metavar "FILE" <>
+                         help "Configuration file in YAML format" )
+    unit = Unit <$> strOption ( short 'u' <>
+                                long "unit" <>
+                                metavar "NAME" <>
+                                help "Systemd unit name" )
+    cli = flag' Cli (short 'i' <> long "cli")
 
 opts :: ParserInfo Options
 opts = info (optParser <**> helper)
