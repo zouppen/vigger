@@ -117,6 +117,7 @@ cmdHandler Stuff{..} w = do
           outfile <- emptySystemTempFile "vigger.mp4"
           composeVideo outfile files
           trashIO trash files
+          pure outfile
         putStrLn $ "Motion stopped on " ++ key ++ ". Got videos: " ++ show videos
       Nothing -> putStrLn errMsg
     ["cameras"] -> traverse cameraState w >>= putStr . formatCameraStates
