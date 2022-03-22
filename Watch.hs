@@ -4,6 +4,7 @@ module Watch ( Watch(stopWatch, lastEnqueue, workDir)
              , stopCapture
              , forkWatch
              , FileEvent(..)
+             , Capture(..)
              , RawFilePath -- re-export
              ) where
 
@@ -25,6 +26,12 @@ import Temporary
 data FileEvent = FileEvent { time :: EpochTime
                            , path :: RawFilePath
                            } deriving (Show)
+
+-- |Capture data type. Returns files and a cleanup action for them.
+data Capture = Capture
+  { captureFiles :: [RawFilePath] -- ^Captured files
+  , captureClean :: STM ()        -- ^Action to remove files
+  }
 
 data Watch = Watch
   { eventQueue   :: TQueue FileEvent       -- ^Queue holding events ("ring buffer")
@@ -48,14 +55,16 @@ startCapture Watch{..} = do
   writeTVar purgeEnabled False
 
 -- |Stop capture, returns file names
-stopCapture :: Watch -> STM [RawFilePath]
+stopCapture :: Watch -> STM Capture
 stopCapture watch@Watch{..} = do
   purging <- readTVar purgeEnabled
   when purging $ throwSTM $ ViggerNonFatal "motionStop called without motionStart"
   -- Everything is fine, let's starting the purge again
   writeTVar purgeEnabled True
   -- Empty the event queue to a list
-  map path <$> flushTQueue eventQueue
+  captureFiles <- map path <$> flushTQueue eventQueue
+  let captureClean = traverse_ trash captureFiles
+  pure Capture{..}
 
 -- |Creates new temporary directory and starts watching closed files
 -- in that directory and purging them after given timeout.

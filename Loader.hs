@@ -30,7 +30,7 @@ data CameraOp = CameraOp { watch        :: Watch
 
 -- |Operations for a single trigger.
 data TriggerOp = TriggerOp { motionStart :: IO ()
-                           , motionEnd   :: IO (Map String [RawFilePath])
+                           , motionEnd   :: IO (Map String Capture)
                            , shutdown    :: IO ()
                            , cameraState :: IO (Map String FileEvent)
                            }

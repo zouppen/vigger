@@ -4,6 +4,7 @@ module CommandInterface (cmdLoop) where
 import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
 import Control.Exception (IOException, try, throw)
 import System.IO.Temp (emptySystemTempFile)
+import Control.Concurrent.STM (atomically)
 
 import Watch
 import Trasher
@@ -38,10 +39,10 @@ cmdHandler Stuff{..} w = do
       Just TriggerOp{..} -> do
         -- Encode video and remove files afterwards
         motion <- motionEnd
-        videos <- flip traverse motion $ \files -> do
+        videos <- flip traverse motion $ \Capture{..} -> do
           outfile <- emptySystemTempFile "vigger.mp4"
-          composeVideo outfile files
-          trashIO trash files
+          composeVideo outfile captureFiles
+          atomically captureClean
           pure outfile
         putStrLn $ "Motion stopped on " ++ key ++ ". Got videos: " ++ show videos
       Nothing -> putStrLn errMsg
