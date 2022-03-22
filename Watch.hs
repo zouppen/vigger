@@ -31,6 +31,7 @@ data Watch = Watch
   , purgeEnabled :: TVar Bool              -- ^Is file removing active
   , lastEnqueue  :: IO FileEvent           -- ^Action returning last
                                            -- incoming event time.
+  , trash        :: Trash                  -- ^File remover
   , stopWatch    :: IO ()                  -- ^Stop watch. Doesn't
                                            -- remove files. Do not
                                            -- call twice.
@@ -68,12 +69,8 @@ forkWatch trash maxAge ih = do
   -- Initialize dead man switch
   lastEnqueueVar <- newTVarIO $ FileEvent 0 ""
   let lastEnqueue = readTVarIO lastEnqueueVar
-  (purgeThread, workDir) <- forkWithTempDir $ const $ forever $ purgeEvent
-    maxAge
-    trash
-    (readTQueue eventQueue)
-    (writeTVar eventInHand)
-    (readTVar purgeEnabled)
+  (purgeThread, workDir) <- forkWithTempDir $ \workDir -> forever $
+    purgeEvent maxAge Watch{stopWatch = undefined, ..}
   -- INotify uses RawFilePath internally so we need to convert between
   -- FilePath and RawFilePath here.
   watchDesc <- watchClosures ih (encodeFilePath workDir) $ \path -> do
@@ -102,19 +99,14 @@ toClosedFile _ = Nothing
 -- |Purge old file if we have permission to do so. Has a problem in
 -- where an event might be lost if startMotion and stopMotion occur
 -- between two transactions.
-purgeEvent :: CTime
-           -> (RawFilePath -> STM ())
-           -> STM FileEvent
-           -> (Maybe FileEvent -> STM ())
-           -> STM Bool
-           -> IO ()
-purgeEvent maxAge trash get hold purgeEnabled = do
+purgeEvent :: CTime -> Watch -> IO ()
+purgeEvent maxAge Watch{..} = do
   FileEvent{..} <- atomically $ do
     -- Keep going only if purging is enabled
-    purgeEnabled >>= guard
+    readTVar purgeEnabled >>= guard
     -- Take one item and place it to "hand" to avoid race conditions.
-    a <- get
-    hold $ Just a
+    a <- readTQueue eventQueue
+    writeTVar eventInHand $ Just a
     pure a
 
   -- Create delay action to span over the expiration time
@@ -125,12 +117,12 @@ purgeEvent maxAge trash get hold purgeEnabled = do
 
   -- File removal at expiration time or fallthrough
   atomically $ do
-    enabled <- purgeEnabled
+    enabled <- readTVar purgeEnabled
     when enabled $ do
       -- Ensure delay spent and add item to remove queue and release it.
       delay
       trash path
-      hold Nothing
+      writeTVar eventInHand Nothing
 
 -- |Retuns STM action which retries until given timeout reached
 delayGuard :: Int -> IO (STM ())
