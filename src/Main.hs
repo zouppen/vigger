@@ -4,6 +4,7 @@ module Main where
 import Data.Foldable (traverse_)
 
 import CommandInterface
+import JournalInterface
 import Loader
 import Config
 
@@ -15,8 +16,7 @@ main = do
     putStrLn "Up and running..."
     case interface of
       Cli -> cli triggerOps
-      Unit name -> do
-        putStrLn $ "Systemd unit not yet supported. " <> name
+      Unit name -> journalInterface name triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps
 
