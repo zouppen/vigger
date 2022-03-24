@@ -8,7 +8,7 @@ import Control.Monad (forever)
 import Data.Aeson hiding (Options)
 import qualified Data.ByteString as B
 import Data.Function (fix)
-import Data.Map.Strict (Map, (!?), keys, foldlWithKey, insert, toList)
+import Data.Map.Strict (Map, (!?), keys, foldlWithKey, insert, toList, delete)
 import GHC.Generics
 import System.IO (Handle, hClose)
 import System.IO.Temp (emptySystemTempFile)
@@ -44,7 +44,7 @@ journalInterface unit recordingPath ops = do
         putStrLn $ "Motion started on " <> method
       (Just TriggerOp{..}, False) -> do
         -- Encode video and remove files afterwards
-        mbStartTime <- (!? method) <$> readTVarIO state
+        mbStartTime <- atomically $ takeKey state method
         case mbStartTime of
           Nothing -> putStrLn $ "Motion never started on " <> method
           Just startTime -> do
@@ -67,7 +67,13 @@ journalInterface unit recordingPath ops = do
       terminateProcess procH
       waitForProcess procH
       pure ()
-      
+
+takeKey :: Ord k => TVar (Map k a) -> k -> STM (Maybe a)
+takeKey var k = do
+  m <- readTVar var
+  writeTVar var $ delete k m
+  pure $ m !? k
+
 -- |Gets lines until a valid JSON element is found, ignoring other
 -- input. In case of EOF ViggerStop is thrown.
 takeNextJsonLine :: FromJSON a => Handle -> IO a
