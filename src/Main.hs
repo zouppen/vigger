@@ -16,7 +16,7 @@ main = do
     putStrLn "Up and running..."
     case interface of
       Cli -> commandInterface triggerOps
-      Unit name -> journalInterface name triggerOps
+      Unit unit -> journalInterface unit (recordingPath config) triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps
 
