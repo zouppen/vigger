@@ -54,6 +54,7 @@ startVideoSplit dir video = runFfmpeg (Just dir)
   , "-i", video
   , "-f", "segment"
   , "-reset_timestamps", "1"
+  , "-segment_time", "0"
   , "-c", "copy"
   , "tmp-%d.mp4"
   ]
