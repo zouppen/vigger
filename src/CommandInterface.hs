@@ -47,12 +47,12 @@ cmdHandler w = do
           pure outfile
         putStrLn $ "Motion stopped on " <> key <> ". Got videos: " <> show videos
       Nothing -> putStrLn errMsg
-    ["cameras"] -> traverse cameraState w >>= putStr . formatCameraStates
+    ["status"] -> traverse cameraState w >>= putStr . formatCameraStates
     ["help"] -> putStr $ unlines
       [ "  list: Lists all triggers"
       , "  start TRIGGER: Start motion"
       , "  stop TRIGGER: Stop motion"
-      , "  cameras: Print timestamps of last camera video fragments"
+      , "  status: Print timestamps of last camera video fragments"
       , "  quit: Quit. Ctrl+D also works."
       ]
     ["quit"] -> throw ViggerStop
