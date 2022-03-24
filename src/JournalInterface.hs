@@ -47,4 +47,4 @@ runJournal isUserUnit unit = do
                                      , std_out = CreatePipe
                                      , close_fds = True
                                      }
-        args = ["-f", "-o", "cat", if isUserUnit then "--user-unit" else "-u", unit]
+        args = ["-n", "0", "-f", "-o", "cat", if isUserUnit then "--user-unit" else "-u", unit]
