@@ -68,5 +68,5 @@ formatCameraStates = foldlWithKey formatTrigger ""
 -- |Gets a command and splits it into words. If EOF reached, returns ["quit"].
 getCmd :: IO [String]
 getCmd = do
-  line <- try getLine :: IO (Either IOException String)
-  either (throw ViggerStop) (pure . words) line
+  line <- try getLine
+  either (ioeConst $ throw ViggerStop) (pure . words) line
