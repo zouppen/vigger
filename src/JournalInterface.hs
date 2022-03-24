@@ -16,6 +16,7 @@ import System.Process
 import Data.Time.LocalTime (ZonedTime, getZonedTime)
 import Data.Time.Format (formatTime, defaultTimeLocale)
 import System.FilePath ((</>))
+import System.Directory (createDirectoryIfMissing)
 
 import Exceptions
 import Ffmpeg
@@ -52,10 +53,8 @@ journalInterface unit recordingPath ops = do
             motion <- motionEnd
             videos <- forConcurrently (toList motion) $ \(name, Capture{..}) -> do
               let dir = recordingPath </> date </> name
-              let filename = time </> ".mp4"
-              print dir
-              print filename              
-              outfile <- emptySystemTempFile "vigger.mp4"
+              createDirectoryIfMissing True dir
+              let outfile = dir </> time <> ".mp4"
               composeVideo outfile captureFiles
               atomically captureClean
               pure outfile
