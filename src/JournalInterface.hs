@@ -49,7 +49,7 @@ journalInterface unit recordingPath ops = do
           Nothing -> putStrLn $ "Motion never started on " <> method
           Just startTime -> do
             let date = formatTime defaultTimeLocale "%Y-%m-%d" startTime
-            let time = formatTime defaultTimeLocale "%H:%M:%S%z" startTime
+            let time = formatTime defaultTimeLocale "%H%M%S%z" startTime
             motion <- motionEnd
             videos <- forConcurrently (toList motion) $ \(name, Capture{..}) -> do
               let dir = recordingPath </> date </> name
