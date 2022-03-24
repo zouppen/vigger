@@ -15,19 +15,15 @@ import Data.Yaml ( FromJSON
                  , decodeFileEither
                  , parseJSON
                  )
-import Data.Aeson.Types ( defaultOptions
-                        , genericParseJSON
-#if MIN_VERSION_aeson(1,4,7)
-                        , rejectUnknownFields
-#endif
-                        )
+import Data.Aeson.Types hiding (Options, Parser)
 import Options.Applicative
 import System.Exit (die)
 
+compatOptions = defaultOptions{ fieldLabelModifier = camelTo2 '_'}
 #if MIN_VERSION_aeson(1,4,7)
-strictOptions = defaultOptions{ rejectUnknownFields = True }
+strictOptions = compatOptions{ rejectUnknownFields = True }
 #else
-strictOptions = defaultOptions
+strictOptions = compatOptions
 #endif
 
 data Options = Options
@@ -40,7 +36,8 @@ data Interface = Cli         -- ^Command line interface
                | Unit String -- ^Systemd journal unit
                deriving (Show)
 
-data Config = Config { triggers :: Map String Trigger
+data Config = Config { recordingPath :: FilePath
+                     , triggers      :: Map String Trigger
                      } deriving (Show, Generic)
 
 data Trigger = Trigger { cameras :: Map String Camera
