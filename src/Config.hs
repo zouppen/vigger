@@ -16,13 +16,19 @@ import Data.Yaml ( FromJSON
                  , parseJSON
                  )
 import Data.Aeson.Types ( defaultOptions
-                        , rejectUnknownFields
                         , genericParseJSON
+#if MIN_VERSION_aeson(1,4,7)
+                        , rejectUnknownFields
+#endif
                         )
 import Options.Applicative
 import System.Exit (die)
 
+#if MIN_VERSION_aeson(1,4,7)
 strictOptions = defaultOptions{ rejectUnknownFields = True }
+#else
+strictOptions = defaultOptions
+#endif
 
 data Options = Options
   { config    :: Config
