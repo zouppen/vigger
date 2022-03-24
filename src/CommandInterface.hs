@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
-module CommandInterface (cli) where
+module CommandInterface (commandInterface) where
 
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically)
@@ -14,8 +14,8 @@ import Loader
 import Watch
 
 -- |The loop which is running when the system is operating nominally.
-cli :: Map String TriggerOp -> IO ()
-cli w = fix $ \loop -> do
+commandInterface :: Map String TriggerOp -> IO ()
+commandInterface w = fix $ \loop -> do
   putStrLn "Vigger command line interface. Type \"help\" for instructions"
   ret <- try $ cmdHandler w
   case ret of

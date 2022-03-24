@@ -15,7 +15,7 @@ main = do
     -- Handle incoming events
     putStrLn "Up and running..."
     case interface of
-      Cli -> cli triggerOps
+      Cli -> commandInterface triggerOps
       Unit name -> journalInterface name triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps
