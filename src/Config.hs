@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, DeriveGeneric #-}
+{-# LANGUAGE RecordWildCards, DeriveGeneric, CPP #-}
 module Config ( Config(..)
               , Options(..)
               , Trigger(..)
