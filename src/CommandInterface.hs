@@ -1,17 +1,17 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 module CommandInterface (cli) where
 
-import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
-import Control.Exception (IOException, try, throw)
-import System.IO.Temp (emptySystemTempFile)
-import Control.Concurrent.STM (atomically)
 import Control.Concurrent.Async (forConcurrently)
+import Control.Concurrent.STM (atomically)
+import Control.Exception (IOException, try, throw)
 import Data.Function (fix)
+import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
+import System.IO.Temp (emptySystemTempFile)
 
-import Watch
-import Ffmpeg
 import Exceptions
+import Ffmpeg
 import Loader
+import Watch
 
 -- |The loop which is running when the system is operating nominally.
 cli :: Map String TriggerOp -> IO ()
