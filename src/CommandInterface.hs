@@ -15,15 +15,16 @@ import Watch
 
 -- |The loop which is running when the system is operating nominally.
 commandInterface :: Map String TriggerOp -> IO ()
-commandInterface w = fix $ \loop -> do
+commandInterface w = do
   putStrLn "Vigger command line interface. Type \"help\" for instructions"
-  ret <- try $ cmdHandler w
-  case ret of
-    Left ViggerStop -> putStrLn "Quitting..."
-    Left (ViggerNonFatal msg) -> do
-      putStrLn $ "Error while running command: " <> msg
-      loop
-    Right _ -> loop
+  fix $ \loop -> do
+    ret <- try $ cmdHandler w
+    case ret of
+      Left ViggerStop -> putStrLn "Quitting..."
+      Left (ViggerNonFatal msg) -> do
+        putStrLn $ "Error while running command: " <> msg
+        loop
+      Right _ -> loop
 
 -- |Process a single command. Throws ViggerExceptions.
 cmdHandler :: Map String TriggerOp -> IO ()
