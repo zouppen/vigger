@@ -3,7 +3,7 @@ module JournalInterface (journalInterface) where
 
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
-import Control.Monad (forever)
+import Control.Monad (when)
 import Data.Aeson hiding (Options)
 import qualified Data.ByteString as B
 import Data.Function (fix)
@@ -15,6 +15,7 @@ import System.Process
 import Data.Time.Format (formatTime, defaultTimeLocale)
 import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
+import Control.Exception (AsyncException(..))
 
 import Exceptions
 import Ffmpeg
@@ -59,21 +60,29 @@ journalInterface unit recordingPath ops = bracket start stop $ \(_,h) -> loopify
       waitForProcess procH
       pure ()
 
--- |Loop until we receive ViggerException which is too fatal to
--- continue. ViggerNonFatal causes the loop to run with an error
--- message.
+-- |Loop until we receive relevant exception and determine what to do
+-- then. Less fatal exceptions are just printed out but others cause a
+-- graceful exit.
 loopify :: IO a -> IO ()
-loopify act = fix $ \loop -> do
-  out <- try $ act
-  case out of
-    Left ViggerStop -> putStrLn "Quitting..."
-    Left (ViggerNonFatal msg) -> do
-      putStrLn $ "Non-fatal error: " <> msg
-      loop
-    Left (ViggerEncodeFail a) -> do
-      putStrLn $ "Video encoding failed with exit code " <> show a <> ". Ignoring."
-      loop
-    Right _ -> loop
+loopify act = do
+  continue <- catches (act >> pure True) [vigger, ctrlc]
+  when continue $ loopify act
+  where
+    vigger = Handler $ \e -> case e of
+      ViggerStop -> do
+        putStrLn "Quitting..."
+        pure False
+      ViggerNonFatal msg -> do
+        putStrLn $ "Non-fatal error: " <> msg
+        pure True
+      ViggerEncodeFail code -> do
+        putStrLn $ "Video encoding failed with exit code " <> show code <> ". Ignoring."
+        pure True
+    ctrlc = Handler $ \e -> do
+      case e of
+        UserInterrupt -> putStrLn "Quitting..."
+        _ -> putStrLn $ "Got " <> show e <> " and quitting.."
+      pure False
 
 -- |Gets lines until a valid JSON element is found, ignoring other
 -- input. In case of EOF ViggerStop is thrown.

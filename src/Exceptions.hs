@@ -4,6 +4,8 @@ module Exceptions ( ViggerException(..)
                   , try
                   , throw
                   , bracket
+                  , Handler(..)
+                  , catches
                   ) where
 
 import Control.Exception
