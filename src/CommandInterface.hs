@@ -16,14 +16,7 @@ import Watch
 commandInterface :: Map String TriggerOp -> IO ()
 commandInterface w = do
   putStrLn "Vigger command line interface. Type \"help\" for instructions"
-  fix $ \loop -> do
-    ret <- try $ cmdHandler w
-    case ret of
-      Left ViggerStop -> putStrLn "Quitting..."
-      Left (ViggerNonFatal msg) -> do
-        putStrLn $ "Error while running command: " <> msg
-        loop
-      Right _ -> loop
+  viggerLoopCatch (cmdHandler w)
 
 -- |Process a single command. Throws ViggerExceptions.
 cmdHandler :: Map String TriggerOp -> IO ()
