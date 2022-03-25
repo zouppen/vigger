@@ -29,29 +29,28 @@ instance FromJSON Rpc
 
 -- Handle incoming RPC messages from journalctl
 journalInterface :: String -> String -> Map String TriggerOp -> IO ()
-journalInterface unit recordingPath ops = do
-  bracket start stop $ \(_,h) -> forever $ do
-    Rpc{..} <- takeNextJsonLine h
-    let op = ops !? method
-    case (op, params) of
-      (Just TriggerOp{..}, True) -> do
-        motionStart
-        putStrLn $ "Motion started on " <> method
-      (Just TriggerOp{..}, False) -> do
-        TriggerData{..} <- motionEnd
-        let date = formatTime defaultTimeLocale "%Y-%m-%d" startTime
-        let time = formatTime defaultTimeLocale "%H%M%S%z" startTime
-        videos <- forConcurrently (toList videoFiles) $ \(name, Capture{..}) -> do
-          -- Prepare directory hierarchy for the video file
-          let dir = recordingPath </> date </> name
-          createDirectoryIfMissing True dir
-          let outfile = dir </> time <> ".mp4"
-          -- Encode video and remove files afterwards
-          composeVideo outfile captureFiles
-          atomically captureClean
-          pure outfile
-        putStrLn $ "Motion stopped on " <> method <> ". Got videos: " <> show videos
-      _ -> putStrLn $ "Ignored method " <> method
+journalInterface unit recordingPath ops = bracket start stop $ \(_,h) -> loopify $ do
+  Rpc{..} <- takeNextJsonLine h
+  let op = ops !? method
+  case (op, params) of
+    (Just TriggerOp{..}, True) -> do
+      motionStart
+      putStrLn $ "Motion started on " <> method
+    (Just TriggerOp{..}, False) -> do
+      TriggerData{..} <- motionEnd
+      let date = formatTime defaultTimeLocale "%Y-%m-%d" startTime
+      let time = formatTime defaultTimeLocale "%H%M%S%z" startTime
+      videos <- forConcurrently (toList videoFiles) $ \(name, Capture{..}) -> do
+        -- Prepare directory hierarchy for the video file
+        let dir = recordingPath </> date </> name
+        createDirectoryIfMissing True dir
+        let outfile = dir </> time <> ".mp4"
+        -- Encode video and remove files afterwards
+        composeVideo outfile captureFiles
+        atomically captureClean
+        pure outfile
+      putStrLn $ "Motion stopped on " <> method <> ". Got videos: " <> show videos
+    _ -> putStrLn $ "Ignored method " <> method
   where
     start = runJournal False unit
     stop (procH, h) = do
@@ -60,11 +59,21 @@ journalInterface unit recordingPath ops = do
       waitForProcess procH
       pure ()
 
-takeKey :: Ord k => TVar (Map k a) -> k -> STM (Maybe a)
-takeKey var k = do
-  m <- readTVar var
-  writeTVar var $ delete k m
-  pure $ m !? k
+-- |Loop until we receive ViggerException which is too fatal to
+-- continue. ViggerNonFatal causes the loop to run with an error
+-- message.
+loopify :: IO a -> IO ()
+loopify act = fix $ \loop -> do
+  out <- try $ act
+  case out of
+    Left ViggerStop -> putStrLn "Quitting..."
+    Left (ViggerNonFatal msg) -> do
+      putStrLn $ "Non-fatal error: " <> msg
+      loop
+    Left (ViggerEncodeFail a) -> do
+      putStrLn $ "Video encoding failed with exit code " <> show a <> ". Ignoring."
+      loop
+    Right _ -> loop
 
 -- |Gets lines until a valid JSON element is found, ignoring other
 -- input. In case of EOF ViggerStop is thrown.
