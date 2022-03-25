@@ -13,23 +13,23 @@ import Watch
 
 -- |The loop which is running when the system is operating nominally.
 commandInterface :: FilePath -> Map String TriggerOp -> IO ()
-commandInterface recordingPath w = bracket start stop $ const $ viggerLoopCatch $ do
+commandInterface recordingPath ops = bracket start stop $ const $ viggerLoopCatch $ do
   cmd <- getCmd
   case cmd of
-    ["list"] -> putStr $ unlines $ map ("- " <>) $ keys w
-    ["start", key] -> case w !? key of
+    ["list"] -> putStr $ unlines $ map ("- " <>) $ keys ops
+    ["start", key] -> case ops !? key of
       Just TriggerOp{..} -> do
         motionStart
         putStrLn $ "Motion started on " <> key
       Nothing -> putStrLn errMsg
-    ["stop", key] -> case w !? key of
+    ["stop", key] -> case ops !? key of
       Just TriggerOp{..} -> do
         -- Encode video and remove files afterwards
         td@TriggerData{..} <- motionEnd
         videos <- renderVideos recordingPath td
         putStrLn $ "Motion stopped on " <> key <> ". Started at " <> show startTime <> ". Got videos: " <> show videos
       Nothing -> putStrLn errMsg
-    ["status"] -> traverse cameraState w >>= putStr . formatCameraStates
+    ["status"] -> traverse cameraState ops >>= putStr . formatCameraStates
     ["help"] -> putStr $ unlines
       [ "  list: Lists all triggers"
       , "  start TRIGGER: Start motion"
