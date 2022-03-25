@@ -13,13 +13,7 @@ import Watch
 
 -- |The loop which is running when the system is operating nominally.
 commandInterface :: FilePath -> Map String TriggerOp -> IO ()
-commandInterface recordingPath w = do
-  putStrLn "Vigger command line interface. Type \"help\" for instructions"
-  viggerLoopCatch $ cmdHandler recordingPath w
-
--- |Process a single command. Throws ViggerExceptions.
-cmdHandler :: FilePath -> Map String TriggerOp -> IO ()
-cmdHandler recordingPath w = do
+commandInterface recordingPath w = bracket start stop $ const $ viggerLoopCatch $ do
   cmd <- getCmd
   case cmd of
     ["list"] -> putStr $ unlines $ map ("- " <>) $ keys w
@@ -46,6 +40,10 @@ cmdHandler recordingPath w = do
     ["quit"] -> throw ViggerStop
     _ -> putStrLn "Unknown command. Type \"help\" to see list of commands"
   where errMsg = "Trigger not found. Type \"list\" to see them all"
+        -- We currently do no resource initialization so start and
+        -- stop are super simple
+        start = putStrLn "Vigger command line interface. Type \"help\" for instructions"
+        stop = const $ pure ()
 
 formatCameraStates :: Map String (Map String FileEvent) -> String
 formatCameraStates = foldlWithKey formatTrigger ""
