@@ -1,22 +1,17 @@
 {-# LANGUAGE DeriveGeneric, RecordWildCards #-}
 module JournalInterface (journalInterface) where
 
-import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
 import Control.Monad (when)
 import Data.Aeson hiding (Options)
-import qualified Data.ByteString as B
 import Data.Function (fix)
-import Data.Map.Strict (Map, (!?), toList)
+import Data.Map.Strict (Map, (!?))
 import GHC.Generics
 import System.IO (Handle, hClose)
 import System.Process
-import Data.Time.Format (formatTime, defaultTimeLocale)
-import System.FilePath ((</>))
-import System.Directory (createDirectoryIfMissing)
+import qualified Data.ByteString as B
 
 import Exceptions
-import Ffmpeg
 import Loader
 import Watch
 
@@ -27,7 +22,7 @@ data Rpc = Rpc { method :: String
 instance FromJSON Rpc
 
 -- Handle incoming RPC messages from journalctl
-journalInterface :: String -> String -> Map String TriggerOp -> IO ()
+journalInterface :: String -> FilePath -> Map String TriggerOp -> IO ()
 journalInterface unit recordingPath ops = bracket start stop $ \(_,h) -> viggerLoopCatch $ do
   Rpc{..} <- takeNextJsonLine h
   let op = ops !? method
@@ -36,18 +31,8 @@ journalInterface unit recordingPath ops = bracket start stop $ \(_,h) -> viggerL
       motionStart
       putStrLn $ "Motion started on " <> method
     (Just TriggerOp{..}, False) -> do
-      TriggerData{..} <- motionEnd
-      let date = formatTime defaultTimeLocale "%Y-%m-%d" startTime
-      let time = formatTime defaultTimeLocale "%H%M%S%z" startTime
-      videos <- forConcurrently (toList videoFiles) $ \(name, Capture{..}) -> do
-        -- Prepare directory hierarchy for the video file
-        let dir = recordingPath </> date </> name
-        createDirectoryIfMissing True dir
-        let outfile = dir </> time <> ".mp4"
-        -- Encode video and remove files afterwards
-        composeVideo outfile captureFiles
-        atomically captureClean
-        pure outfile
+      td@TriggerData{..} <- motionEnd
+      videos <- renderVideos recordingPath td
       putStrLn $ "Motion stopped on " <> method <> ". Got videos: " <> show videos
     _ -> putStrLn $ "Ignored method " <> method
   where

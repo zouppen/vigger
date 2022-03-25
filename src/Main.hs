@@ -15,7 +15,7 @@ main = do
     -- Handle incoming events
     putStrLn "Up and running..."
     case interface of
-      Cli -> commandInterface triggerOps
+      Cli -> commandInterface (recordingPath config) triggerOps
       Unit unit -> journalInterface unit (recordingPath config) triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps

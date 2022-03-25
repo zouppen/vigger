@@ -4,22 +4,27 @@ module Loader ( Stuff(..)
               , TriggerData(..)
               , withStuff
               , initTriggers
+              , renderVideos
               ) where
 
-import System.INotify
-import Control.Concurrent.STM
-import Data.Map.Strict (Map)
-import Data.Foldable (traverse_)
-import Data.Time.LocalTime (ZonedTime, getZonedTime)
-import Control.Concurrent (killThread, forkIO)
 import Control.Applicative
+import Control.Concurrent (killThread, forkIO)
+import Control.Concurrent.Async (forConcurrently)
+import Control.Concurrent.STM
+import Data.Foldable (traverse_)
+import Data.Map.Strict (Map, toList, fromList)
+import Data.Time.Format (formatTime, defaultTimeLocale)
+import Data.Time.LocalTime (ZonedTime, getZonedTime)
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath ((</>))
+import System.INotify
 
 import Config
-import Watch
-import Trasher
-import Ffmpeg
 import Deadman
 import Exceptions
+import Ffmpeg
+import Trasher
+import Watch
 
 -- |Initialized stuff, intended to be used as a singleton, initialized
 -- with `withStuff`.
@@ -98,3 +103,21 @@ forkCamera Stuff{..} Camera{..} = do
       pure $ stopVideoSplit procH
   -- Return handle
   pure CameraOp{..}
+
+-- |Render given TrigerData to a video and store it under
+-- recordingPath.
+renderVideos :: FilePath -> TriggerData -> IO (Map String FilePath)
+renderVideos recordingPath TriggerData{..} =
+  fromList <$> forConcurrently (toList videoFiles) renderVideo
+  where
+    date = formatTime defaultTimeLocale "%Y-%m-%d" startTime
+    time = formatTime defaultTimeLocale "%H%M%S%z" startTime
+    renderVideo (name, Capture{..}) = do
+      -- Prepare directory hierarchy for the video file
+      let dir = recordingPath </> date </> name
+      createDirectoryIfMissing True dir
+      let outfile = dir </> time <> ".mp4"
+      -- Encode video and remove files afterwards
+      composeVideo outfile captureFiles
+      atomically captureClean
+      pure (name, outfile)

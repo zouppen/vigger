@@ -8,19 +8,18 @@ import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
 import System.IO.Temp (emptySystemTempFile)
 
 import Exceptions
-import Ffmpeg
 import Loader
 import Watch
 
 -- |The loop which is running when the system is operating nominally.
-commandInterface :: Map String TriggerOp -> IO ()
-commandInterface w = do
+commandInterface :: FilePath -> Map String TriggerOp -> IO ()
+commandInterface recordingPath w = do
   putStrLn "Vigger command line interface. Type \"help\" for instructions"
-  viggerLoopCatch (cmdHandler w)
+  viggerLoopCatch $ cmdHandler recordingPath w
 
 -- |Process a single command. Throws ViggerExceptions.
-cmdHandler :: Map String TriggerOp -> IO ()
-cmdHandler w = do
+cmdHandler :: FilePath -> Map String TriggerOp -> IO ()
+cmdHandler recordingPath w = do
   cmd <- getCmd
   case cmd of
     ["list"] -> putStr $ unlines $ map ("- " <>) $ keys w
@@ -32,12 +31,8 @@ cmdHandler w = do
     ["stop", key] -> case w !? key of
       Just TriggerOp{..} -> do
         -- Encode video and remove files afterwards
-        TriggerData{..} <- motionEnd
-        videos <- forConcurrently videoFiles $ \Capture{..} -> do
-          outfile <- emptySystemTempFile "vigger.mp4"
-          composeVideo outfile captureFiles
-          atomically captureClean
-          pure outfile
+        td@TriggerData{..} <- motionEnd
+        videos <- renderVideos recordingPath td
         putStrLn $ "Motion stopped on " <> key <> ". Started at " <> show startTime <> ". Got videos: " <> show videos
       Nothing -> putStrLn errMsg
     ["status"] -> traverse cameraState w >>= putStr . formatCameraStates
