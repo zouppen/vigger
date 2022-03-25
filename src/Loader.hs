@@ -106,8 +106,8 @@ forkCamera Stuff{..} Camera{..} = do
 
 -- |Render given TrigerData to a video and store it under
 -- recordingPath.
-renderVideos :: FilePath -> TriggerData -> IO (Map String FilePath)
-renderVideos recordingPath TriggerData{..} =
+renderVideos :: Config -> TriggerData -> IO (Map String FilePath)
+renderVideos Config{..} TriggerData{..} =
   fromList <$> forConcurrently (toList videoFiles) renderVideo
   where
     date = formatTime defaultTimeLocale "%Y-%m-%d" startTime

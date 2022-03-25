@@ -11,6 +11,7 @@ import System.IO (Handle, hClose)
 import System.Process
 import qualified Data.ByteString as B
 
+import Config (Config(..))
 import Exceptions
 import Loader
 import Watch
@@ -22,8 +23,8 @@ data Rpc = Rpc { method :: String
 instance FromJSON Rpc
 
 -- Handle incoming RPC messages from journalctl
-journalInterface :: String -> FilePath -> Map String TriggerOp -> IO ()
-journalInterface unit recordingPath ops = bracket start stop $ \(_,h) -> viggerLoopCatch $ do
+journalInterface :: Config -> String -> Map String TriggerOp -> IO ()
+journalInterface config unit ops = bracket start stop $ \(_,h) -> viggerLoopCatch $ do
   Rpc{..} <- takeNextJsonLine h
   let op = ops !? method
   case (op, params) of
@@ -32,7 +33,7 @@ journalInterface unit recordingPath ops = bracket start stop $ \(_,h) -> viggerL
       putStrLn $ "Motion started on " <> method
     (Just TriggerOp{..}, False) -> do
       td@TriggerData{..} <- motionEnd
-      videos <- renderVideos recordingPath td
+      videos <- renderVideos config td
       putStrLn $ "Motion stopped on " <> method <> ". Got videos: " <> show videos
     _ -> putStrLn $ "Ignored method " <> method
   where

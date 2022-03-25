@@ -7,13 +7,14 @@ import Data.Function (fix)
 import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
 import System.IO.Temp (emptySystemTempFile)
 
+import Config (Config(..))
 import Exceptions
 import Loader
 import Watch
 
 -- |The loop which is running when the system is operating nominally.
-commandInterface :: FilePath -> Map String TriggerOp -> IO ()
-commandInterface recordingPath ops = bracket start stop $ const $ viggerLoopCatch $ do
+commandInterface :: Config -> Map String TriggerOp -> IO ()
+commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
   cmd <- getCmd
   case cmd of
     ["list"] -> putStr $ unlines $ map ("- " <>) $ keys ops
@@ -26,7 +27,7 @@ commandInterface recordingPath ops = bracket start stop $ const $ viggerLoopCatc
       Just TriggerOp{..} -> do
         -- Encode video and remove files afterwards
         td@TriggerData{..} <- motionEnd
-        videos <- renderVideos recordingPath td
+        videos <- renderVideos config td
         putStrLn $ "Motion stopped on " <> key <> ". Started at " <> show startTime <> ". Got videos: " <> show videos
       Nothing -> putStrLn errMsg
     ["status"] -> traverse cameraState ops >>= putStr . formatCameraStates
