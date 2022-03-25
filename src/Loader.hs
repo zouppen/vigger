@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 module Loader ( Stuff(..)
               , TriggerOp(..)
+              , TriggerData(..)
               , withStuff
               , initTriggers
               ) where
@@ -9,13 +10,16 @@ import System.INotify
 import Control.Concurrent.STM
 import Data.Map.Strict (Map)
 import Data.Foldable (traverse_)
+import Data.Time.LocalTime (ZonedTime, getZonedTime)
 import Control.Concurrent (killThread, forkIO)
+import Control.Applicative
 
 import Config
 import Watch
 import Trasher
 import Ffmpeg
 import Deadman
+import Exceptions
 
 -- |Initialized stuff, intended to be used as a singleton, initialized
 -- with `withStuff`.
@@ -30,10 +34,14 @@ data CameraOp = CameraOp { watch        :: Watch
 
 -- |Operations for a single trigger.
 data TriggerOp = TriggerOp { motionStart :: IO ()
-                           , motionEnd   :: IO (Map String Capture)
+                           , motionEnd   :: IO TriggerData
                            , shutdown    :: IO ()
                            , cameraState :: IO (Map String FileEvent)
                            }
+
+data TriggerData = TriggerData { startTime  :: ZonedTime
+                               , videoFiles :: Map String Capture
+                               }
 
 -- |Initialize all the bells and whistles and run the action.
 withStuff :: (Stuff -> IO ()) -> IO ()
@@ -51,9 +59,17 @@ initTriggers Config{..} stuff = traverse (forkTrigger stuff) triggers
 forkTrigger :: Stuff -> Trigger -> IO TriggerOp
 forkTrigger stuff Trigger{..} = do
   ops <- traverse (forkCamera stuff) cameras
+  startVar <- newEmptyTMVarIO
   -- Collect actions
-  let motionStart = atomically $ traverse_ (startCapture.watch) ops
-      motionEnd = atomically $ traverse (stopCapture.watch) ops
+  let motionStart = do
+        now <- getZonedTime
+        atomically $ do
+          putTMVar startVar now <|> throwSTM (ViggerNonFatal "Already triggered")
+          traverse_ (startCapture.watch) ops
+      motionEnd = atomically $ do
+        startTime <- takeTMVar startVar <|> throwSTM (ViggerNonFatal "Trigger already stopped")
+        videoFiles <- traverse (stopCapture.watch) ops
+        pure TriggerData{..}
       shutdown = flip traverse_ ops $ \CameraOp{..} -> do
         -- Stop FFmpeg
         splitterStop

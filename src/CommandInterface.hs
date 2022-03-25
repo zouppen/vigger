@@ -3,7 +3,6 @@ module CommandInterface (commandInterface) where
 
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically)
-import Control.Exception (IOException, try, throw)
 import Data.Function (fix)
 import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
 import System.IO.Temp (emptySystemTempFile)
@@ -40,13 +39,13 @@ cmdHandler w = do
     ["stop", key] -> case w !? key of
       Just TriggerOp{..} -> do
         -- Encode video and remove files afterwards
-        motion <- motionEnd
-        videos <- forConcurrently motion $ \Capture{..} -> do
+        TriggerData{..} <- motionEnd
+        videos <- forConcurrently videoFiles $ \Capture{..} -> do
           outfile <- emptySystemTempFile "vigger.mp4"
           composeVideo outfile captureFiles
           atomically captureClean
           pure outfile
-        putStrLn $ "Motion stopped on " <> key <> ". Got videos: " <> show videos
+        putStrLn $ "Motion stopped on " <> key <> ". Started at " <> show startTime <> ". Got videos: " <> show videos
       Nothing -> putStrLn errMsg
     ["status"] -> traverse cameraState w >>= putStr . formatCameraStates
     ["help"] -> putStr $ unlines

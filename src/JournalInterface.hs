@@ -3,7 +3,6 @@ module JournalInterface (journalInterface) where
 
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
-import Control.Exception (try, throw, bracket)
 import Control.Monad (forever)
 import Data.Aeson hiding (Options)
 import qualified Data.ByteString as B
@@ -13,7 +12,6 @@ import GHC.Generics
 import System.IO (Handle, hClose)
 import System.IO.Temp (emptySystemTempFile)
 import System.Process
-import Data.Time.LocalTime (ZonedTime, getZonedTime)
 import Data.Time.Format (formatTime, defaultTimeLocale)
 import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
@@ -32,33 +30,27 @@ instance FromJSON Rpc
 -- Handle incoming RPC messages from journalctl
 journalInterface :: String -> String -> Map String TriggerOp -> IO ()
 journalInterface unit recordingPath ops = do
-  state <- newTVarIO (mempty :: Map String ZonedTime)
   bracket start stop $ \(_,h) -> forever $ do
     Rpc{..} <- takeNextJsonLine h
     let op = ops !? method
     case (op, params) of
       (Just TriggerOp{..}, True) -> do
-        -- Store motion start time
-        getZonedTime >>= atomically . modifyTVar state . insert method
         motionStart
         putStrLn $ "Motion started on " <> method
       (Just TriggerOp{..}, False) -> do
-        -- Encode video and remove files afterwards
-        mbStartTime <- atomically $ takeKey state method
-        case mbStartTime of
-          Nothing -> putStrLn $ "Motion never started on " <> method
-          Just startTime -> do
-            let date = formatTime defaultTimeLocale "%Y-%m-%d" startTime
-            let time = formatTime defaultTimeLocale "%H%M%S%z" startTime
-            motion <- motionEnd
-            videos <- forConcurrently (toList motion) $ \(name, Capture{..}) -> do
-              let dir = recordingPath </> date </> name
-              createDirectoryIfMissing True dir
-              let outfile = dir </> time <> ".mp4"
-              composeVideo outfile captureFiles
-              atomically captureClean
-              pure outfile
-            putStrLn $ "Motion stopped on " <> method <> ". Got videos: " <> show videos
+        TriggerData{..} <- motionEnd
+        let date = formatTime defaultTimeLocale "%Y-%m-%d" startTime
+        let time = formatTime defaultTimeLocale "%H%M%S%z" startTime
+        videos <- forConcurrently (toList videoFiles) $ \(name, Capture{..}) -> do
+          -- Prepare directory hierarchy for the video file
+          let dir = recordingPath </> date </> name
+          createDirectoryIfMissing True dir
+          let outfile = dir </> time <> ".mp4"
+          -- Encode video and remove files afterwards
+          composeVideo outfile captureFiles
+          atomically captureClean
+          pure outfile
+        putStrLn $ "Motion stopped on " <> method <> ". Got videos: " <> show videos
       _ -> putStrLn $ "Ignored method " <> method
   where
     start = runJournal False unit

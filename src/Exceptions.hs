@@ -1,4 +1,10 @@
-module Exceptions where
+module Exceptions ( ViggerException(..)
+                  , ioeConst
+                  -- Re-exports
+                  , try
+                  , throw
+                  , bracket
+                  ) where
 
 import Control.Exception
 
