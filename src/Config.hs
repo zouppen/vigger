@@ -9,6 +9,7 @@ module Config ( Config(..)
 
 import GHC.Generics
 import Data.Map.Strict (Map)
+import Data.Text (Text)
 import Data.Yaml ( FromJSON
                  , ParseException
                  , prettyPrintParseException
@@ -36,7 +37,7 @@ data Interface = Cli         -- ^Command line interface
                | Unit String -- ^Systemd journal unit
                deriving (Show)
 
-data Config = Config { recordingPath :: FilePath
+data Config = Config { recordingPath :: Text
                      , triggers      :: Map String Trigger
                      } deriving (Show, Generic)
 

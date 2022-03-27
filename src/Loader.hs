@@ -16,13 +16,15 @@ import Data.Map.Strict (Map, toList, fromList)
 import Data.Time.Format (formatTime, defaultTimeLocale)
 import Data.Time.LocalTime (ZonedTime, getZonedTime)
 import System.Directory (createDirectoryIfMissing)
-import System.FilePath ((</>))
+import System.FilePath (takeDirectory)
 import System.INotify
+import Data.Text (pack, unpack)
 
 import Config
 import Deadman
 import Exceptions
 import Ffmpeg
+import Formatter
 import Trasher
 import Watch
 
@@ -110,13 +112,14 @@ renderVideos :: Config -> TriggerData -> IO (Map String FilePath)
 renderVideos Config{..} TriggerData{..} =
   fromList <$> forConcurrently (toList videoFiles) renderVideo
   where
-    date = formatTime defaultTimeLocale "%Y-%m-%d" startTime
-    time = formatTime defaultTimeLocale "%H%M%S%z" startTime
+    startFormat fmt = pure $ pack $ formatTime defaultTimeLocale (unpack fmt) startTime
     renderVideo (name, Capture{..}) = do
+      let subst = toSubstituter [ f0 "camera" (pack name)
+                                , f1 "start" startFormat
+                                ]
       -- Prepare directory hierarchy for the video file
-      let dir = recordingPath </> date </> name
-      createDirectoryIfMissing True dir
-      let outfile = dir </> time <> ".mp4"
+      let outfile = unpack $ substitute subst recordingPath
+      createDirectoryIfMissing True $ takeDirectory outfile
       -- Encode video and remove files afterwards
       composeVideo outfile captureFiles
       atomically captureClean
