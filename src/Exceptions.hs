@@ -41,7 +41,7 @@ viggerLoopCatch act = do
         putStrLn $ "Video encoding failed with exit code " <> show code <> ". Ignoring."
         pure True
       ViggerTemplateFail msg -> do
-        putStrLn $ "File name template parse error " <> msg
+        putStrLn $ "File name template parse error: " <> msg
         pure False
     ctrlc = Handler $ \e -> do
       case e of
