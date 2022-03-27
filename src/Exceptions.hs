@@ -13,6 +13,7 @@ import Control.Exception
 data ViggerException = ViggerStop
                      | ViggerNonFatal String
                      | ViggerEncodeFail Int
+                     | ViggerTemplateFail String
                      deriving Show
 
 instance Exception ViggerException
@@ -39,6 +40,9 @@ viggerLoopCatch act = do
       ViggerEncodeFail code -> do
         putStrLn $ "Video encoding failed with exit code " <> show code <> ". Ignoring."
         pure True
+      ViggerTemplateFail msg -> do
+        putStrLn $ "File name template parse error " <> msg
+        pure False
     ctrlc = Handler $ \e -> do
       case e of
         UserInterrupt -> putStrLn "Quitting..."

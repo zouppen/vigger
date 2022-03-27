@@ -11,7 +11,7 @@ import Data.Attoparsec.Combinator (lookAhead)
 import Data.Attoparsec.Text
 import Data.Map.Strict (Map, (!?), fromList)
 import Data.Text (Text, unpack)
-import qualified Data.Text as T
+import Exceptions
 
 newtype Substituter = Substituter (Text -> Maybe SubstAct)
 
@@ -22,11 +22,11 @@ data Substitution = Substitution Text SubstAct
 -- |Try to substitute variables in a template. Returns Right with the
 -- text when substitution succeeds or Left with the position where the
 -- error occured.
-substitute :: Substituter -> Text -> Either Int Text
-substitute subst template = case feed (parse (everything subst) template) "" of
-  Done i r -> if i == mempty then Right r else failed i
-  Fail i _ _ -> failed i
-  where failed i = Left (T.length template - T.length i)
+substitute :: Substituter -> Text -> Text
+substitute subst template =
+  case parseOnly (everything subst <* endOfInput) template of
+    Left _ -> throw $ ViggerTemplateFail "Parse error"
+    Right out -> out
 
 -- |Parses and substitutes variables on the go.
 everything :: Substituter -> Parser Text
@@ -46,7 +46,7 @@ var = "{{" *> takeText1before (eitherP sep "}}") `sepBy1` sep <* "}}"
 varSubst :: Substituter -> [Text] -> Parser Text
 varSubst _ [] = fail "Empty variable name"
 varSubst (Substituter s) (name:xs) = case s name of
-  Nothing             -> fail $ "Unknown variable: " <> unpack name
+  Nothing             -> throw $ ViggerTemplateFail $ "Unknown variable: " <> unpack name
   Just (SubstAct act) -> act xs
 
 -- |This takes one or many chars as Text until it matches the given
@@ -64,10 +64,10 @@ toSubstituter handlers = Substituter (m !?)
 f0 :: Text -> Text -> Substitution
 f0 key value = Substitution key (SubstAct f)
   where f [] = pure value
-        f _  = fail $ "No arguments were expected to " <> unpack key
+        f _  = throw $ ViggerTemplateFail $ "No arguments were expected to " <> unpack key
 
 -- |Replacement with one argument
 f1 :: Text -> (Text -> Parser Text) -> Substitution
 f1 key func = Substitution key (SubstAct f)
   where f [arg] = func arg
-        f _     = fail $ "Expecting exactly one argument to " <> unpack key
+        f _     = throw $ ViggerTemplateFail $ "Expecting exactly one argument to " <> unpack key
