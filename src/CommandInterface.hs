@@ -5,7 +5,8 @@ import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically)
 import Data.Function (fix)
 import Data.Map.Strict (Map, (!?), keys, foldMapWithKey)
-import Data.Text (Text, pack, unpack)
+import Data.Text.Lazy (Text, pack, unpack)
+import qualified Data.Text.Lazy.IO as T
 import System.IO.Temp (emptySystemTempFile)
 
 import Config (Config(..))
@@ -31,7 +32,7 @@ commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
         videos <- renderVideos config td
         putStrLn $ "Motion stopped on " <> key <> ". Started at " <> show startTime <> ". Got videos: " <> show videos
       Nothing -> putStrLn errMsg
-    ["status"] -> traverse cameraState ops >>= putStr . formatCameraStates
+    ["status"] -> traverse cameraState ops >>= T.putStr . formatCameraStates
     ["help"] -> putStr $ unlines
       [ "  list: Lists all triggers"
       , "  start TRIGGER: Start motion"
@@ -47,11 +48,11 @@ commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
         start = putStrLn "Vigger command line interface. Type \"help\" for instructions"
         stop = const $ pure ()
 
-formatCameraStates :: Map Text (Map Text FileEvent) -> String
+formatCameraStates :: Map Text (Map Text FileEvent) -> Text
 formatCameraStates = foldMapWithKey formatTrigger
-  where formatTrigger k m = "  " <> unpack k <> ":\n" <> foldMapWithKey formatState m
-        formatState k v = "    " <> unpack k <> ":\n" <> formatEvent v
-        formatEvent FileEvent{..} =  "      time: "  <> show time <> "\n      path: " <> show path <> "\n"
+  where formatTrigger k m = "  " <> k <> ":\n" <> foldMapWithKey formatState m
+        formatState k v = "    " <> k <> ":\n" <> formatEvent v
+        formatEvent FileEvent{..} =  "      time: "  <> pack (show time) <> "\n      path: " <> pack (show path) <> "\n"
 
 -- |Gets a command and splits it into words. If EOF reached, returns ["quit"].
 getCmd :: IO [String]

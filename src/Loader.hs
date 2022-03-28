@@ -18,7 +18,7 @@ import Data.Time.LocalTime (ZonedTime, getZonedTime)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 import System.INotify
-import Data.Text (Text, pack, unpack)
+import Data.Text.Lazy (Text, pack, unpack)
 
 import Config
 import Deadman

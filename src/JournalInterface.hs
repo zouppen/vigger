@@ -6,7 +6,7 @@ import Control.Monad (when)
 import Data.Aeson hiding (Options)
 import Data.Function (fix)
 import Data.Map.Strict (Map, (!?))
-import Data.Text (Text, unpack)
+import Data.Text.Lazy (Text, unpack)
 import GHC.Generics
 import System.IO (Handle, hClose)
 import System.Process

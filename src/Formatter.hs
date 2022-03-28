@@ -8,9 +8,9 @@ module Formatter ( substitute
 
 import Control.Applicative
 import Data.Attoparsec.Combinator (lookAhead)
-import Data.Attoparsec.Text
+import Data.Attoparsec.Text.Lazy
 import Data.Map.Strict (Map, (!?), fromList)
-import Data.Text (Text, unpack)
+import Data.Text.Lazy (Text, unpack, fromStrict)
 import Exceptions
 
 newtype Substituter = Substituter (Text -> Maybe SubstAct)
@@ -19,14 +19,13 @@ newtype SubstAct = SubstAct ([Text] -> Parser Text)
 
 data Substitution = Substitution Text SubstAct
 
--- |Try to substitute variables in a template. Returns Right with the
--- text when substitution succeeds or Left with the position where the
+-- |Try to substitute variables in a template. Returns the
+-- text when substitution succeeds or throws ViggerException if any
 -- error occured.
 substitute :: Substituter -> Text -> Text
-substitute subst template =
-  case parseOnly (everything subst <* endOfInput) template of
-    Left _ -> throw $ ViggerTemplateFail "Parse error"
-    Right out -> out
+substitute subst template = case parse (everything subst) template of
+  Done _ a -> a
+  _        -> throw $ ViggerTemplateFail "Parse error"
 
 -- |Parses and substitutes variables on the go.
 everything :: Substituter -> Parser Text
@@ -53,7 +52,7 @@ varSubst (Substituter s) (name:xs) = case s name of
 -- "end" parser. Doesn't consume "end".
 takeText1before :: Parser a -> Parser Text
 takeText1before end = takeMany1text anyCharBefore
-  where takeMany1text = fmap fst . match . skipMany1
+  where takeMany1text = fmap (fromStrict . fst) . match . skipMany1
         anyCharBefore = eitherP (lookAhead end) anyChar >>= either (const empty) pure
 
 toSubstituter :: [Substitution] -> Substituter

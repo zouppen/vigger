@@ -9,7 +9,7 @@ module Config ( Config(..)
 
 import GHC.Generics
 import Data.Map.Strict (Map)
-import Data.Text (Text)
+import Data.Text.Lazy (Text)
 import Data.Yaml ( FromJSON
                  , ParseException
                  , prettyPrintParseException
