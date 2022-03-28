@@ -38,10 +38,10 @@ data Interface = Cli         -- ^Command line interface
                deriving (Show)
 
 data Config = Config { recordingPath :: Text
-                     , triggers      :: Map String Trigger
+                     , triggers      :: Map Text Trigger
                      } deriving (Show, Generic)
 
-data Trigger = Trigger { cameras :: Map String Camera
+data Trigger = Trigger { cameras :: Map Text Camera
                        } deriving (Show, Generic)
 
 data Camera = Camera

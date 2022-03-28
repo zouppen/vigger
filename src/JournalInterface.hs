@@ -6,6 +6,7 @@ import Control.Monad (when)
 import Data.Aeson hiding (Options)
 import Data.Function (fix)
 import Data.Map.Strict (Map, (!?))
+import Data.Text (Text, unpack)
 import GHC.Generics
 import System.IO (Handle, hClose)
 import System.Process
@@ -16,26 +17,26 @@ import Exceptions
 import Loader
 import Watch
 
-data Rpc = Rpc { method :: String
+data Rpc = Rpc { method :: Text
                , params :: Bool
                } deriving (Generic, Show)
 
 instance FromJSON Rpc
 
 -- Handle incoming RPC messages from journalctl
-journalInterface :: Config -> String -> Map String TriggerOp -> IO ()
+journalInterface :: Config -> String -> Map Text TriggerOp -> IO ()
 journalInterface config unit ops = bracket start stop $ \(_,h) -> viggerLoopCatch $ do
   Rpc{..} <- takeNextJsonLine h
   let op = ops !? method
   case (op, params) of
     (Just TriggerOp{..}, True) -> do
       motionStart
-      putStrLn $ "Motion started on " <> method
+      putStrLn $ "Motion started on " <> unpack method
     (Just TriggerOp{..}, False) -> do
       td@TriggerData{..} <- motionEnd
       videos <- renderVideos config td
-      putStrLn $ "Motion stopped on " <> method <> ". Got videos: " <> show videos
-    _ -> putStrLn $ "Ignored method " <> method
+      putStrLn $ "Motion stopped on " <> unpack method <> ". Got videos: " <> show videos
+    _ -> putStrLn $ "Ignored method " <> unpack method
   where
     start = runJournal False unit
     stop (procH, h) = do

@@ -18,7 +18,7 @@ import Data.Time.LocalTime (ZonedTime, getZonedTime)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 import System.INotify
-import Data.Text (pack, unpack)
+import Data.Text (Text, pack, unpack)
 
 import Config
 import Deadman
@@ -43,12 +43,12 @@ data CameraOp = CameraOp { watch        :: Watch
 data TriggerOp = TriggerOp { motionStart :: IO ()
                            , motionEnd   :: IO TriggerData
                            , shutdown    :: IO ()
-                           , cameraState :: IO (Map String FileEvent)
+                           , cameraState :: IO (Map Text FileEvent)
                            }
 
 data TriggerData = TriggerData { startTime   :: ZonedTime
-                               , triggerName :: String
-                               , videoFiles  :: Map String Capture
+                               , triggerName :: Text
+                               , videoFiles  :: Map Text Capture
                                }
 
 -- |Initialize all the bells and whistles and run the action.
@@ -60,11 +60,11 @@ withStuff act = do
 
 -- |Initialize everything for the command interface, with a map
 -- of possible operations.
-initTriggers :: Config -> Stuff -> IO (Map String TriggerOp)
+initTriggers :: Config -> Stuff -> IO (Map Text TriggerOp)
 initTriggers Config{..} stuff = traverseWithKey (forkTrigger stuff) triggers
 
 -- |Fork a trigger, which is be composed of one or more cameras.
-forkTrigger :: Stuff -> String -> Trigger -> IO TriggerOp
+forkTrigger :: Stuff -> Text -> Trigger -> IO TriggerOp
 forkTrigger stuff triggerName Trigger{..} = do
   ops <- traverse (forkCamera stuff) cameras
   startVar <- newEmptyTMVarIO
@@ -109,14 +109,14 @@ forkCamera Stuff{..} Camera{..} = do
 
 -- |Render given TrigerData to a video and store it under
 -- recordingPath.
-renderVideos :: Config -> TriggerData -> IO (Map String FilePath)
+renderVideos :: Config -> TriggerData -> IO (Map Text FilePath)
 renderVideos Config{..} TriggerData{..} =
   fromList <$> forConcurrently (toList videoFiles) renderVideo
   where
     startFormat fmt = pure $ pack $ formatTime defaultTimeLocale (unpack fmt) startTime
-    renderVideo (name, Capture{..}) = do
-      let subst = toSubstituter [ f0 "camera" (pack name)
-                                , f0 "trigger" (pack triggerName)
+    renderVideo (cameraName, Capture{..}) = do
+      let subst = toSubstituter [ f0 "camera" cameraName
+                                , f0 "trigger" triggerName
                                 , f1 "start" startFormat
                                 ]
       -- Prepare directory hierarchy for the video file
@@ -125,4 +125,4 @@ renderVideos Config{..} TriggerData{..} =
       -- Encode video and remove files afterwards
       composeVideo outfile captureFiles
       atomically captureClean
-      pure (name, outfile)
+      pure (cameraName, outfile)

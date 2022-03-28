@@ -5,6 +5,7 @@ import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically)
 import Data.Function (fix)
 import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
+import Data.Text (Text, pack, unpack)
 import System.IO.Temp (emptySystemTempFile)
 
 import Config (Config(..))
@@ -13,17 +14,17 @@ import Loader
 import Watch
 
 -- |The loop which is running when the system is operating nominally.
-commandInterface :: Config -> Map String TriggerOp -> IO ()
+commandInterface :: Config -> Map Text TriggerOp -> IO ()
 commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
   cmd <- getCmd
   case cmd of
-    ["list"] -> putStr $ unlines $ map ("- " <>) $ keys ops
-    ["start", key] -> case ops !? key of
+    ["list"] -> putStr $ unlines $ map (("- " <> ).unpack) $ keys ops
+    ["start", key] -> case ops !? (pack key) of
       Just TriggerOp{..} -> do
         motionStart
         putStrLn $ "Motion started on " <> key
       Nothing -> putStrLn errMsg
-    ["stop", key] -> case ops !? key of
+    ["stop", key] -> case ops !? (pack key) of
       Just TriggerOp{..} -> do
         -- Encode video and remove files afterwards
         td@TriggerData{..} <- motionEnd
@@ -46,10 +47,10 @@ commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
         start = putStrLn "Vigger command line interface. Type \"help\" for instructions"
         stop = const $ pure ()
 
-formatCameraStates :: Map String (Map String FileEvent) -> String
+formatCameraStates :: Map Text (Map Text FileEvent) -> String
 formatCameraStates = foldlWithKey formatTrigger ""
-  where formatTrigger a k m = a <> "  " <> k <> ":\n" <> foldlWithKey formatState "" m
-        formatState a k v = a <> "    " <> k <> ":\n" <> formatEvent v
+  where formatTrigger a k m = a <> "  " <> unpack k <> ":\n" <> foldlWithKey formatState "" m
+        formatState a k v = a <> "    " <> unpack k <> ":\n" <> formatEvent v
         formatEvent FileEvent{..} =  "      time: "  <> show time <> "\n      path: " <> show path <> "\n"
 
 -- |Gets a command and splits it into words. If EOF reached, returns ["quit"].
