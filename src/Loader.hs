@@ -12,7 +12,7 @@ import Control.Concurrent (killThread, forkIO)
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
 import Data.Foldable (traverse_)
-import Data.Map.Strict (Map, toList, fromList)
+import Data.Map.Strict (Map, toList, fromList, traverseWithKey)
 import Data.Time.Format (formatTime, defaultTimeLocale)
 import Data.Time.LocalTime (ZonedTime, getZonedTime)
 import System.Directory (createDirectoryIfMissing)
@@ -46,8 +46,9 @@ data TriggerOp = TriggerOp { motionStart :: IO ()
                            , cameraState :: IO (Map String FileEvent)
                            }
 
-data TriggerData = TriggerData { startTime  :: ZonedTime
-                               , videoFiles :: Map String Capture
+data TriggerData = TriggerData { startTime   :: ZonedTime
+                               , triggerName :: String
+                               , videoFiles  :: Map String Capture
                                }
 
 -- |Initialize all the bells and whistles and run the action.
@@ -60,11 +61,11 @@ withStuff act = do
 -- |Initialize everything for the command interface, with a map
 -- of possible operations.
 initTriggers :: Config -> Stuff -> IO (Map String TriggerOp)
-initTriggers Config{..} stuff = traverse (forkTrigger stuff) triggers
+initTriggers Config{..} stuff = traverseWithKey (forkTrigger stuff) triggers
 
 -- |Fork a trigger, which is be composed of one or more cameras.
-forkTrigger :: Stuff -> Trigger -> IO TriggerOp
-forkTrigger stuff Trigger{..} = do
+forkTrigger :: Stuff -> String -> Trigger -> IO TriggerOp
+forkTrigger stuff triggerName Trigger{..} = do
   ops <- traverse (forkCamera stuff) cameras
   startVar <- newEmptyTMVarIO
   -- Collect actions
@@ -115,6 +116,7 @@ renderVideos Config{..} TriggerData{..} =
     startFormat fmt = pure $ pack $ formatTime defaultTimeLocale (unpack fmt) startTime
     renderVideo (name, Capture{..}) = do
       let subst = toSubstituter [ f0 "camera" (pack name)
+                                , f0 "trigger" (pack triggerName)
                                 , f1 "start" startFormat
                                 ]
       -- Prepare directory hierarchy for the video file
