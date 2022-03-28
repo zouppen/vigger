@@ -4,7 +4,7 @@ module CommandInterface (commandInterface) where
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically)
 import Data.Function (fix)
-import Data.Map.Strict (Map, (!?), keys, foldlWithKey)
+import Data.Map.Strict (Map, (!?), keys, foldMapWithKey)
 import Data.Text (Text, pack, unpack)
 import System.IO.Temp (emptySystemTempFile)
 
@@ -48,9 +48,9 @@ commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
         stop = const $ pure ()
 
 formatCameraStates :: Map Text (Map Text FileEvent) -> String
-formatCameraStates = foldlWithKey formatTrigger ""
-  where formatTrigger a k m = a <> "  " <> unpack k <> ":\n" <> foldlWithKey formatState "" m
-        formatState a k v = a <> "    " <> unpack k <> ":\n" <> formatEvent v
+formatCameraStates = foldMapWithKey formatTrigger
+  where formatTrigger k m = "  " <> unpack k <> ":\n" <> foldMapWithKey formatState m
+        formatState k v = "    " <> unpack k <> ":\n" <> formatEvent v
         formatEvent FileEvent{..} =  "      time: "  <> show time <> "\n      path: " <> show path <> "\n"
 
 -- |Gets a command and splits it into words. If EOF reached, returns ["quit"].
