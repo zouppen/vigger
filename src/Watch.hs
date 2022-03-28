@@ -37,7 +37,7 @@ data Watch = Watch
   { eventQueue   :: TQueue FileEvent -- ^Queue holding events ("ring buffer")
   , eventInHand  :: TMVar FileEvent  -- ^Currently processed event
   , purgeEnabled :: TVar Bool        -- ^Is file removing active
-  , lastEnqueue  :: IO FileEvent     -- ^Action returning last
+  , lastEnqueue  :: STM FileEvent    -- ^Action returning last
                                      -- incoming event time.
   , trash        :: Trash            -- ^File remover
   , stopWatch    :: IO ()            -- ^Stop watch. Doesn't remove
@@ -74,7 +74,7 @@ forkWatch trash maxAge ih = do
   purgeEnabled <- newTVarIO True -- Motion stopped at start
   -- Initialize dead man switch
   lastEnqueueVar <- newTVarIO $ FileEvent 0 ""
-  let lastEnqueue = readTVarIO lastEnqueueVar
+  let lastEnqueue = readTVar lastEnqueueVar
   (purgeThread, workDir) <- forkWithTempDir $ \workDir -> forever $
     purgeEvent maxAge Watch{stopWatch = undefined, ..}
   -- INotify uses RawFilePath internally so we need to convert between

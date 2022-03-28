@@ -82,7 +82,7 @@ forkTrigger stuff Trigger{..} = do
         splitterStop
         -- Stop watches
         stopWatch watch
-      cameraState = traverse (lastEnqueue . watch) ops
+      cameraState = atomically $ traverse (lastEnqueue . watch) ops
   pure TriggerOp{..}
 
 -- |Fork video splitter and cleaner for an individual camera.
@@ -96,7 +96,7 @@ forkCamera Stuff{..} Camera{..} = do
     Just timeout -> do
       tid <- forkIO $ deadManLoop
         (toEnum timeout)
-        (time <$> lastEnqueue watch)
+        (time <$> (atomically $ lastEnqueue watch))
         start
         stopVideoSplit
       pure $ killThread tid
