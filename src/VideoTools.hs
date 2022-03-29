@@ -13,7 +13,7 @@ import System.Process (waitForProcess)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 import Data.Text.Lazy (Text, pack, unpack)
-import Data.Time.Format (formatTime, defaultTimeLocale)
+import Data.Time.Format (FormatTime, formatTime, defaultTimeLocale)
 import Data.Map.Strict (Map)
 import Control.Concurrent.Async (mapConcurrently, forConcurrently)
 
@@ -56,11 +56,10 @@ renderVideos :: Config -> TriggerData -> IO (Map Text FilePath)
 renderVideos Config{..} TriggerData{..} =
   mapConcurrently renderVideo $ mapWithKey (,) videoFiles
   where
-    startFormat fmt = pure $ pack $ formatTime defaultTimeLocale (unpack fmt) startTime
     renderVideo (cameraName, Capture{..}) = do
       let subst = toSubstituter [ f0 "camera" cameraName
                                 , f0 "trigger" triggerName
-                                , f1 "start" startFormat
+                                , f1 "start" (pure . formatTimeText startTime)
                                 ]
       -- Prepare directory hierarchy for the video file
       let outfile = unpack $ substitute subst recordingPath
@@ -69,3 +68,7 @@ renderVideos Config{..} TriggerData{..} =
       composeVideo outfile captureFiles
       atomically captureClean
       pure outfile
+
+-- |Version of formatTime which works with Text
+formatTimeText :: FormatTime t => t -> Text -> Text
+formatTimeText time fmt = pack $ formatTime defaultTimeLocale (unpack fmt) time
