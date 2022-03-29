@@ -6,14 +6,12 @@ import Control.Concurrent.STM (atomically)
 import Data.Map.Strict (Map, (!?), keys, foldMapWithKey)
 import Data.Text.Lazy (Text, pack, unpack)
 import qualified Data.Text.Lazy.IO as T
-import qualified Data.ByteString as BS
 
 import Config (Config(..))
 import Exceptions
 import Loader
 import Watch
-import VideoTools (renderVideos)
-import Ffmpeg (Jpeg(Jpeg))
+import VideoTools (renderVideos, storeJpegMap)
 
 -- |The loop which is running when the system is operating nominally.
 commandInterface :: Config -> Map Text TriggerOp -> IO ()
@@ -36,9 +34,9 @@ commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
     ["matrix", key] -> case ops !? (pack key) of
       Just TriggerOp{..} -> do
         putStrLn $ "Triggering matrix message on " <> key
-        files <- trigSnapshot
-        -- FIXME Temporary print of file sizes until we strore them somewhere
-        putStr $ flip foldMapWithKey files $ \cam (Jpeg bs) -> "  " <> show cam <> ": " <> show (BS.length bs) <> "\n"
+        payload <- trigSnapshot
+        files <- storeJpegMap config (pack key) payload
+        putStr $ flip foldMapWithKey files $ \cam file -> "  " <> show cam <> ": " <> file <> "\n"
       Nothing -> putStrLn errMsg
     ["status"] -> traverse cameraState ops >>= T.putStr . formatCameraStates
     ["help"] -> putStr $ unlines

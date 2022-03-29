@@ -3,12 +3,13 @@
 -- in Ffmpeg.
 module VideoTools ( snapshotFrame
                   , renderVideos
+                  , storeJpegMap
                   , TriggerData(..)
                   ) where
 
 import Control.Concurrent.STM
 import Control.Monad (guard)
-import Data.Map.Strict (Map, mapWithKey)
+import Data.Map.Strict (Map, mapWithKey, traverseWithKey)
 import Data.Text.Lazy (Text)
 import System.FilePath.ByteString (RawFilePath, decodeFilePath)
 import Data.Time.LocalTime (ZonedTime)
@@ -18,6 +19,7 @@ import System.FilePath (takeDirectory)
 import Data.Text.Lazy (Text, pack, unpack)
 import Data.Time.Format (FormatTime, formatTime, defaultTimeLocale)
 import Control.Concurrent.Async (mapConcurrently, forConcurrently)
+import Data.Time.LocalTime (ZonedTime, getZonedTime)
 
 import Config
 import Ffmpeg
@@ -40,6 +42,21 @@ snapshotFrame fileActs = do
   forConcurrently newValueActs $ \act -> do
     file <- atomically act
     takeLastFrame $ decodeFilePath file
+
+-- |Store given map to files
+storeJpegMap :: Config -> Text -> Map Text Jpeg -> IO (Map Text FilePath)
+storeJpegMap Config{..} triggerName m = do
+  now <- getZonedTime
+  flip traverseWithKey m $ \cameraName bs -> do
+    let subst = toSubstituter [ f0 "camera" cameraName
+                              , f0 "trigger" triggerName
+                              , f1 "time" (pure . formatTimeText now)
+                              ]
+    -- Prepare directory hierarchy for the video file
+    let outfile = unpack $ substitute subst snapshotPath
+    createDirectoryIfMissing True $ takeDirectory outfile
+    -- Store file
+    pure outfile
 
 -- |Render given TrigerData to a video and store it based on the
 -- template defined in recordingPath.
