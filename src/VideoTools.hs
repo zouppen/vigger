@@ -5,7 +5,7 @@ module VideoTools where
 
 import Control.Concurrent.STM
 import Control.Monad (guard)
-import Data.Map.Strict (Map, elems)
+import Data.Map.Strict (Map, elems, mapWithKey)
 import Data.Text.Lazy (Text)
 import System.FilePath.ByteString (RawFilePath, decodeFilePath)
 import Data.Time.LocalTime (ZonedTime)
@@ -14,8 +14,8 @@ import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 import Data.Text.Lazy (Text, pack, unpack)
 import Data.Time.Format (formatTime, defaultTimeLocale)
-import Data.Map.Strict (Map, toList, fromList)
-import Control.Concurrent.Async (forConcurrently)
+import Data.Map.Strict (Map)
+import Control.Concurrent.Async (mapConcurrently, forConcurrently)
 
 import Config
 import Ffmpeg
@@ -54,7 +54,7 @@ snapshotFrame fileAct = do
 -- template defined in recordingPath.
 renderVideos :: Config -> TriggerData -> IO (Map Text FilePath)
 renderVideos Config{..} TriggerData{..} =
-  fromList <$> forConcurrently (toList videoFiles) renderVideo
+  mapConcurrently renderVideo $ mapWithKey (,) videoFiles
   where
     startFormat fmt = pure $ pack $ formatTime defaultTimeLocale (unpack fmt) startTime
     renderVideo (cameraName, Capture{..}) = do
@@ -68,4 +68,4 @@ renderVideos Config{..} TriggerData{..} =
       -- Encode video and remove files afterwards
       composeVideo outfile captureFiles
       atomically captureClean
-      pure (cameraName, outfile)
+      pure outfile
