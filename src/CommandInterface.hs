@@ -31,9 +31,9 @@ commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
         videos <- renderVideos config td
         putStrLn $ "Motion stopped on " <> key <> ". Started at " <> show startTime <> ". Got videos: " <> show videos
       Nothing -> putStrLn errMsg
-    ["matrix", key] -> case ops !? (pack key) of
+    ["snapshot", key] -> case ops !? (pack key) of
       Just TriggerOp{..} -> do
-        putStrLn $ "Triggering matrix message on " <> key
+        putStrLn $ "Triggering snapshot on " <> key
         payload <- trigSnapshot
         files <- storeJpegMap config (pack key) payload
         putStr $ flip foldMapWithKey files $ \cam file -> "  " <> show cam <> ": " <> file <> "\n"
@@ -43,7 +43,7 @@ commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
       [ "  list: Lists all triggers"
       , "  start TRIGGER: Start motion"
       , "  stop TRIGGER: Stop motion"
-      , "  matrix TRIGGER: Send message via Matrix"
+      , "  snapshot TRIGGER: Take a snapshot from given trigger"
       , "  status: Print timestamps of last camera video fragments"
       , "  quit: Quit. Ctrl+D also works."
       ]
