@@ -3,16 +3,15 @@ module CommandInterface (commandInterface) where
 
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically)
-import Data.Function (fix)
 import Data.Map.Strict (Map, (!?), keys, foldMapWithKey)
 import Data.Text.Lazy (Text, pack, unpack)
 import qualified Data.Text.Lazy.IO as T
-import System.IO.Temp (emptySystemTempFile)
 
 import Config (Config(..))
 import Exceptions
 import Loader
 import Watch
+import VideoTools (renderVideos)
 
 -- |The loop which is running when the system is operating nominally.
 commandInterface :: Config -> Map Text TriggerOp -> IO ()
@@ -35,7 +34,8 @@ commandInterface config ops = bracket start stop $ const $ viggerLoopCatch $ do
     ["matrix", key] -> case ops !? (pack key) of
       Just TriggerOp{..} -> do
         putStrLn $ "Triggering matrix message on " <> key
-        matrixSend
+        files <- trigSnapshot
+        putStrLn $ show files
       Nothing -> putStrLn errMsg
     ["status"] -> traverse cameraState ops >>= T.putStr . formatCameraStates
     ["help"] -> putStr $ unlines

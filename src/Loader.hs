@@ -4,30 +4,24 @@ module Loader ( Stuff(..)
               , TriggerData(..)
               , withStuff
               , initTriggers
-              , renderVideos
               ) where
 
 import Control.Applicative
 import Control.Concurrent (killThread, forkIO)
-import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
 import Data.Foldable (traverse_)
-import Data.Map.Strict (Map, toList, fromList, traverseWithKey)
-import Data.Time.Format (formatTime, defaultTimeLocale)
+import Data.Map.Strict (Map, traverseWithKey)
 import Data.Time.LocalTime (ZonedTime, getZonedTime)
-import System.Directory (createDirectoryIfMissing)
-import System.FilePath (takeDirectory)
-import System.INotify
+import System.INotify (INotify, withINotify)
 import Data.Text.Lazy (Text, pack, unpack)
 
 import Config
 import Deadman
 import Exceptions
 import Ffmpeg
-import Formatter
 import Trasher
 import Watch
-import Matrix
+import VideoTools (TriggerData(..), snapshotFrame)
 
 -- |Initialized stuff, intended to be used as a singleton, initialized
 -- with `withStuff`.
@@ -41,17 +35,12 @@ data CameraOp = CameraOp { watch        :: Watch
                          }
 
 -- |Operations for a single trigger.
-data TriggerOp = TriggerOp { motionStart :: IO ()
-                           , motionEnd   :: IO TriggerData
-                           , shutdown    :: IO ()
-                           , matrixSend  :: IO ()
-                           , cameraState :: IO (Map Text FileEvent)
+data TriggerOp = TriggerOp { motionStart  :: IO ()
+                           , motionEnd    :: IO TriggerData
+                           , shutdown     :: IO ()
+                           , trigSnapshot :: IO (Map Text FilePath)
+                           , cameraState  :: IO (Map Text FileEvent)
                            }
-
-data TriggerData = TriggerData { startTime   :: ZonedTime
-                               , triggerName :: Text
-                               , videoFiles  :: Map Text Capture
-                               }
 
 -- |Initialize all the bells and whistles and run the action.
 withStuff :: (Stuff -> IO ()) -> IO ()
@@ -86,9 +75,9 @@ forkTrigger stuff triggerName Trigger{..} = do
         -- Stop watches
         stopWatch watch
       cameraState = atomically $ traverse (lastEnqueue . watch) ops
-      matrixSend = do
+      trigSnapshot = do
         let files = traverse (fmap path . lastEnqueue . watch) ops
-        sendToMatrix triggerName files
+        snapshotFrame files
   pure TriggerOp{..}
 
 -- |Fork video splitter and cleaner for an individual camera.
@@ -111,23 +100,3 @@ forkCamera Stuff{..} Camera{..} = do
       pure $ stopVideoSplit procH
   -- Return handle
   pure CameraOp{..}
-
--- |Render given TrigerData to a video and store it under
--- recordingPath.
-renderVideos :: Config -> TriggerData -> IO (Map Text FilePath)
-renderVideos Config{..} TriggerData{..} =
-  fromList <$> forConcurrently (toList videoFiles) renderVideo
-  where
-    startFormat fmt = pure $ pack $ formatTime defaultTimeLocale (unpack fmt) startTime
-    renderVideo (cameraName, Capture{..}) = do
-      let subst = toSubstituter [ f0 "camera" cameraName
-                                , f0 "trigger" triggerName
-                                , f1 "start" startFormat
-                                ]
-      -- Prepare directory hierarchy for the video file
-      let outfile = unpack $ substitute subst recordingPath
-      createDirectoryIfMissing True $ takeDirectory outfile
-      -- Encode video and remove files afterwards
-      composeVideo outfile captureFiles
-      atomically captureClean
-      pure (cameraName, outfile)

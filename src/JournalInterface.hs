@@ -16,6 +16,7 @@ import Config (Config(..))
 import Exceptions
 import Loader
 import Watch
+import VideoTools (renderVideos)
 
 data Rpc = Rpc { method :: Text
                , params :: Bool
