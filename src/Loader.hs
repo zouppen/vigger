@@ -10,7 +10,8 @@ import Control.Applicative
 import Control.Concurrent (killThread, forkIO)
 import Control.Concurrent.STM
 import Data.Foldable (traverse_)
-import Data.Map.Strict (Map, traverseWithKey)
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Time.LocalTime (ZonedTime, getZonedTime)
 import System.INotify (INotify, withINotify)
 import Data.Text.Lazy (Text, pack, unpack)
@@ -38,7 +39,7 @@ data CameraOp = CameraOp { watch        :: Watch
 data TriggerOp = TriggerOp { motionStart  :: IO ()
                            , motionEnd    :: IO TriggerData
                            , shutdown     :: IO ()
-                           , trigSnapshot :: IO (Map Text FilePath)
+                           , trigSnapshot :: IO (Map Text Jpeg)
                            , cameraState  :: IO (Map Text FileEvent)
                            }
 
@@ -52,7 +53,7 @@ withStuff act = do
 -- |Initialize everything for the command interface, with a map
 -- of possible operations.
 initTriggers :: Config -> Stuff -> IO (Map Text TriggerOp)
-initTriggers Config{..} stuff = traverseWithKey (forkTrigger stuff) triggers
+initTriggers Config{..} stuff = M.traverseWithKey (forkTrigger stuff) triggers
 
 -- |Fork a trigger, which is be composed of one or more cameras.
 forkTrigger :: Stuff -> Text -> Trigger -> IO TriggerOp
@@ -76,7 +77,7 @@ forkTrigger stuff triggerName Trigger{..} = do
         stopWatch watch
       cameraState = atomically $ traverse (lastEnqueue . watch) ops
       trigSnapshot = do
-        let files = traverse (fmap path . lastEnqueue . watch) ops
+        let files = M.map (fmap path . lastEnqueue . watch) ops
         snapshotFrame files
   pure TriggerOp{..}
 

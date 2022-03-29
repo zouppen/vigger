@@ -1,11 +1,14 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 -- |Video utils which are more tied to our data structures than those
 -- in Ffmpeg.
-module VideoTools where
+module VideoTools ( snapshotFrame
+                  , renderVideos
+                  , TriggerData(..)
+                  ) where
 
 import Control.Concurrent.STM
 import Control.Monad (guard)
-import Data.Map.Strict (Map, elems, mapWithKey)
+import Data.Map.Strict (Map, mapWithKey)
 import Data.Text.Lazy (Text)
 import System.FilePath.ByteString (RawFilePath, decodeFilePath)
 import Data.Time.LocalTime (ZonedTime)
@@ -14,7 +17,6 @@ import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 import Data.Text.Lazy (Text, pack, unpack)
 import Data.Time.Format (FormatTime, formatTime, defaultTimeLocale)
-import Data.Map.Strict (Map)
 import Control.Concurrent.Async (mapConcurrently, forConcurrently)
 
 import Config
@@ -27,28 +29,17 @@ data TriggerData = TriggerData { startTime   :: ZonedTime
                                , videoFiles  :: Map Text Capture
                                }
 
--- |Collect a frame snapshot. May block for some time so consider
--- running with forkIO to make it work in the background. Returns new
--- temporary files and the caller must clean them. You don't probably
--- want to call this but trigSnapshot from Loader.
-snapshotFrame :: STM (Map Text RawFilePath) -> IO (Map Text FilePath)
-snapshotFrame fileAct = do
-  -- TODO should fork ffmpeg right when individual files are
-  -- generated, without waiting for all. That would make it perform
-  -- better since it could work during the waiting time.
-
-  -- Wait new video files for each camera
-  oldFiles <- atomically $ elems <$> fileAct
-  files <- atomically $ do
-    files <- fileAct
-    -- Wait until all files have changed
-    guard $ and $ zipWith (/=) oldFiles $ elems files
-    pure files
-  -- Generate videos concurrently and wait for completion
-  videos <- traverse (takeLastFrame . decodeFilePath) files
-  traverse (waitForProcess . snd) videos
-  -- Return the files
-  pure $ fst <$> videos
+-- |Collect a frame snapshot. May block for some time because waits
+-- for new videos and then renders the snapshots. You don't probably
+-- want to call this directly but trigSnapshot from Loader.
+snapshotFrame :: Map Text (STM RawFilePath) -> IO (Map Text Jpeg)
+snapshotFrame fileActs = do
+  -- Get actions Wrap the action to reference value (the startup value)
+  newValueActs <- atomically $ traverse changeGuard fileActs
+  -- Then run encoding as new files appear.
+  forConcurrently newValueActs $ \act -> do
+    file <- atomically act
+    takeLastFrame $ decodeFilePath file
 
 -- |Render given TrigerData to a video and store it based on the
 -- template defined in recordingPath.
@@ -72,3 +63,15 @@ renderVideos Config{..} TriggerData{..} =
 -- |Version of formatTime which works with Text
 formatTimeText :: FormatTime t => t -> Text -> Text
 formatTimeText time fmt = pack $ formatTime defaultTimeLocale (unpack fmt) time
+
+-- |Checks the given value and returns another action which retries
+-- until the value is different from the initial one and returns that
+-- one. Intended to run in an upcoming transaction (otherwise it never
+-- changes by itself).
+changeGuard :: Eq a => STM a -> STM (STM a)
+changeGuard act = do
+  old <- act
+  pure $ do
+    new <- act
+    guard $ old /= new
+    pure new

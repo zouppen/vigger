@@ -4,10 +4,12 @@ module Ffmpeg ( startVideoSplit
               , composeVideo
               , takeLastFrame
               , ProcessHandle
+              , Jpeg(..)
               ) where
 
 import System.IO
 import System.Process
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as B
 import System.IO.Temp (withSystemTempFile, emptySystemTempFile)
 import System.FilePath.ByteString (RawFilePath)
@@ -16,20 +18,23 @@ import Control.Exception (throwIO)
 
 import Exceptions
 
+newtype Jpeg = Jpeg BS.ByteString
+
 -- |Takes last frame of the video. This iterates through the whole
--- video so it's useful only videos which are already split to
--- segments. Remember to wait for completion before accessing the
--- output file!
-takeLastFrame :: FilePath -> IO (FilePath, ProcessHandle)
-takeLastFrame infile = do
-  outfile <- emptySystemTempFile "vigger.jpg"
-  ph <- runFfmpeg Nothing [ "-loglevel", "warning"
-                          , "-i", infile
-                          , "-update", "1"
-                          , "-q:v", "3"
-                          , outfile
-                          ]
-  pure (outfile, ph)
+-- video so it's useful only for videos which are already split to
+-- segments. Returns ByteString or throws ViggerException.
+takeLastFrame :: FilePath -> IO Jpeg
+takeLastFrame infile = withSystemTempFile "vigger.jpg" $ \outfile h -> do
+  p <- runFfmpeg Nothing [ "-loglevel", "warning"
+                         , "-i", infile
+                         , "-update", "1"
+                         , "-q:v", "3"
+                         , outfile
+                         ]
+  val <- waitForProcess p
+  case val of
+    ExitSuccess   -> Jpeg <$> BS.hGetContents h
+    ExitFailure x -> throwIO $ ViggerEncodeFail x
 
 -- |Concatenates video using FFmpeg concat demuxer. May throw
 -- ViggerException in case FFmpeg returns non-zero return value.
