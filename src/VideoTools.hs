@@ -1,4 +1,6 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
+-- |Video utils which are more tied to our data structures than those
+-- in Ffmpeg.
 module VideoTools where
 
 import Control.Concurrent.STM
@@ -27,9 +29,14 @@ data TriggerData = TriggerData { startTime   :: ZonedTime
 
 -- |Collect a frame snapshot. May block for some time so consider
 -- running with forkIO to make it work in the background. Returns new
--- temporary files and the caller must clean them.
+-- temporary files and the caller must clean them. You don't probably
+-- want to call this but trigSnapshot from Loader.
 snapshotFrame :: STM (Map Text RawFilePath) -> IO (Map Text FilePath)
 snapshotFrame fileAct = do
+  -- TODO should fork ffmpeg right when individual files are
+  -- generated, without waiting for all. That would make it perform
+  -- better since it could work during the waiting time.
+
   -- Wait new video files for each camera
   oldFiles <- atomically $ elems <$> fileAct
   files <- atomically $ do
@@ -43,8 +50,8 @@ snapshotFrame fileAct = do
   -- Return the files
   pure $ fst <$> videos
 
--- |Render given TrigerData to a video and store it under
--- recordingPath.
+-- |Render given TrigerData to a video and store it based on the
+-- template defined in recordingPath.
 renderVideos :: Config -> TriggerData -> IO (Map Text FilePath)
 renderVideos Config{..} TriggerData{..} =
   fromList <$> forConcurrently (toList videoFiles) renderVideo

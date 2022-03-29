@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 module Loader ( Stuff(..)
               , TriggerOp(..)
               , TriggerData(..)
