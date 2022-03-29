@@ -47,7 +47,7 @@ snapshotFrame fileActs = do
 storeJpegMap :: Config -> Text -> Map Text Jpeg -> IO (Map Text FilePath)
 storeJpegMap Config{..} triggerName m = do
   now <- getZonedTime
-  flip traverseWithKey m $ \cameraName bs -> do
+  flip traverseWithKey m $ \cameraName pic -> do
     let subst = toSubstituter [ f0 "camera" cameraName
                               , f0 "trigger" triggerName
                               , f1 "time" (pure . formatTimeText now)
@@ -56,6 +56,7 @@ storeJpegMap Config{..} triggerName m = do
     let outfile = unpack $ substitute subst snapshotPath
     createDirectoryIfMissing True $ takeDirectory outfile
     -- Store file
+    writeJpeg outfile pic
     pure outfile
 
 -- |Render given TrigerData to a video and store it based on the

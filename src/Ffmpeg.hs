@@ -4,7 +4,8 @@ module Ffmpeg ( startVideoSplit
               , composeVideo
               , takeLastFrame
               , ProcessHandle
-              , Jpeg(..)
+              , Jpeg
+              , writeJpeg
               ) where
 
 import System.IO
@@ -19,6 +20,10 @@ import Control.Exception (throwIO)
 import Exceptions
 
 newtype Jpeg = Jpeg BS.ByteString
+
+-- |Store given JPEG to given file.
+writeJpeg :: FilePath -> Jpeg -> IO ()
+writeJpeg path (Jpeg bs) = BS.writeFile path bs
 
 -- |Takes last frame of the video. This iterates through the whole
 -- video so it's useful only for videos which are already split to
