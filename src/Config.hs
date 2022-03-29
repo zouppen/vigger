@@ -38,6 +38,7 @@ data Interface = Cli         -- ^Command line interface
                deriving (Show)
 
 data Config = Config { recordingPath :: Text
+                     , matrix        :: Maybe Value
                      , triggers      :: Map Text Trigger
                      } deriving (Show, Generic)
 

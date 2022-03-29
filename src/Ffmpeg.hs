@@ -2,18 +2,34 @@
 module Ffmpeg ( startVideoSplit
               , stopVideoSplit
               , composeVideo
+              , takeLastFrame
               , ProcessHandle
               ) where
 
 import System.IO
 import System.Process
 import qualified Data.ByteString.Lazy.Char8 as B
-import System.IO.Temp (withSystemTempFile)
+import System.IO.Temp (withSystemTempFile, emptySystemTempFile)
 import System.FilePath.ByteString (RawFilePath)
 import System.Exit
 import Control.Exception (throw)
 
 import Exceptions
+
+-- |Takes last frame of the video. This iterates through the whole
+-- video so it's useful only videos which are already split to
+-- segments. Remember to wait for completion before accessing the
+-- output file!
+takeLastFrame :: FilePath -> IO (FilePath, ProcessHandle)
+takeLastFrame infile = do
+  outfile <- emptySystemTempFile "vigger.jpg"
+  ph <- runFfmpeg Nothing [ "-loglevel", "warning"
+                          , "-i", infile
+                          , "-update", "1"
+                          , "-q:v", "3"
+                          , outfile
+                          ]
+  pure (outfile, ph)
 
 -- |Concatenates video using FFmpeg concat demuxer. May throw
 -- ViggerException in case FFmpeg returns non-zero return value.

@@ -27,6 +27,7 @@ import Ffmpeg
 import Formatter
 import Trasher
 import Watch
+import Matrix
 
 -- |Initialized stuff, intended to be used as a singleton, initialized
 -- with `withStuff`.
@@ -43,6 +44,7 @@ data CameraOp = CameraOp { watch        :: Watch
 data TriggerOp = TriggerOp { motionStart :: IO ()
                            , motionEnd   :: IO TriggerData
                            , shutdown    :: IO ()
+                           , matrixSend  :: IO ()
                            , cameraState :: IO (Map Text FileEvent)
                            }
 
@@ -84,6 +86,9 @@ forkTrigger stuff triggerName Trigger{..} = do
         -- Stop watches
         stopWatch watch
       cameraState = atomically $ traverse (lastEnqueue . watch) ops
+      matrixSend = do
+        let files = traverse (fmap path . lastEnqueue . watch) ops
+        sendToMatrix triggerName files
   pure TriggerOp{..}
 
 -- |Fork video splitter and cleaner for an individual camera.

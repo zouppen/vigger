@@ -21,6 +21,7 @@ executable vigger
                        Ffmpeg,
                        Temporary,
                        Loader,
+                       Matrix,
                        CommandInterface,
                        JournalInterface
                        Exceptions,
