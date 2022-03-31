@@ -39,8 +39,13 @@ data Interface = Cli         -- ^Command line interface
 
 data Config = Config { recordingPath :: Text
                      , snapshotPath  :: Text
-                     , matrix        :: Maybe Value
+                     , matrix        :: Matrix
                      , triggers      :: Map Text Trigger
+                     } deriving (Show, Generic)
+
+data Matrix = Matrix { homeserver  :: String
+                     , accessToken :: String
+                     , room        :: Text
                      } deriving (Show, Generic)
 
 data Trigger = Trigger { cameras :: Map Text Camera
@@ -58,6 +63,9 @@ data Camera = Camera
 
 instance FromJSON Config where
    parseJSON = genericParseJSON strictOptions
+
+instance FromJSON Matrix where
+  parseJSON = genericParseJSON strictOptions
 
 instance FromJSON Trigger where
   parseJSON = genericParseJSON strictOptions
