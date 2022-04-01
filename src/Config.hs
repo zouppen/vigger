@@ -4,6 +4,7 @@ module Config ( Config(..)
               , Trigger(..)
               , Camera(..)
               , Interface(..)
+              , Matrix(..)
               , parseCommandAndConfig
               ) where
 
@@ -45,7 +46,7 @@ data Config = Config { recordingPath :: Text
 
 data Matrix = Matrix { homeserver  :: String
                      , accessToken :: String
-                     , room        :: Text
+                     , room        :: String
                      } deriving (Show, Generic)
 
 data Trigger = Trigger { cameras :: Map Text Camera
