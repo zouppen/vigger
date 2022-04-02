@@ -1,14 +1,20 @@
-{-# LANGUAGE OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings, RecordWildCards, DeriveGeneric #-}
 module Matrix where
 
-import Data.Aeson
-import Network.Curl
-import Network.Curl.Aeson
 import Control.Exception (handle, throw)
-import qualified Network.URI.Encode as U
+import Data.Aeson
+import qualified Data.ByteString.Lazy as B
+import Data.Int (Int64)
 import Data.Text.Lazy (Text)
+import Data.UUID (toString)
+import Data.UUID.V1 (nextUUID)
+import GHC.Generics
+import Network.Curl hiding (contentType)
+import Network.Curl.Aeson
+import qualified Network.URI.Encode as U
 
 import Config
+import Exceptions
 
 -- Some helpers for parsing the JSON input
 
@@ -22,10 +28,40 @@ newtype RoomId = RoomId String deriving (Show)
 instance FromJSON RoomId where
   parseJSON x = fmap RoomId $ parseJSON x ... "room_id"
 
-newtype ContentUri = ContentUri String deriving (Show)
+newtype ContentUri = ContentUri String deriving (Show, Generic)
 
 instance FromJSON ContentUri where
   parseJSON x = fmap ContentUri $ parseJSON x ... "content_uri"
+
+instance ToJSON ContentUri where
+  toEncoding = genericToEncoding ourEncoding
+
+newtype EventId = EventId String deriving (Show)
+
+instance FromJSON EventId where
+  parseJSON x = fmap EventId $ parseJSON x ... "event_id"
+
+-- Helpers for JSON output
+
+ourEncoding = defaultOptions{ omitNothingFields = True, unwrapUnaryRecords = True }
+
+data Message = Message
+  { body     :: Text
+  , msgtype  :: Text
+  , url      :: Maybe ContentUri
+  , info     :: Maybe MessageInfo
+  } deriving (Show, Generic)
+
+instance ToJSON Message where
+  toEncoding = genericToEncoding ourEncoding
+
+instance ToJSON MessageInfo where
+  toEncoding = genericToEncoding ourEncoding
+
+data MessageInfo = MessageInfo
+  { mimetype :: String
+  , size     :: Int64
+  } deriving (Show, Generic)
 
 -- |Matrix connection, holding some basic information such as the token.
 data MatrixConn = MatrixConn { baseUrl  :: BaseUrl
@@ -72,8 +108,32 @@ joinRoom :: MatrixConn -> String -> IO RoomId
 joinRoom conn room =
   matrixQuery conn "POST" ("/_matrix/client/v3/join/" <> U.encode room) Nothing
 
-
-upload :: MatrixConn -> String -> Payload -> IO ContentUri
-upload conn room payload = do
-  roomId <- joinRoom conn room
+-- |Upload content without sending them to any rooms
+upload :: MatrixConn -> Payload -> IO ContentUri
+upload conn payload =
   matrixQuery conn "POST" "/_matrix/media/v3/upload" (Just payload)
+
+-- |Upload and send
+sendFile :: MatrixConn -> String -> Text -> Text -> Payload -> IO EventId
+sendFile conn room body msgtype file = do
+  RoomId roomId <- joinRoom conn room
+  uuid <- nextUUID >>= maybe (throwIO $ ViggerNonFatal "UUID generation failed") pure
+  -- First, upload the file
+  url <- upload conn file
+  -- Then send the actual event
+  let Payload{..} = file
+      message = Message { url = Just url
+                        , info = Just MessageInfo { mimetype = contentType
+                                                  , size = B.length payload
+                                                  }
+                        , ..
+                        }
+      msgUri = "/_matrix/client/v3/rooms/" <>
+               U.encode roomId <>
+               "/send/m.room.message/" <>
+               U.encode (toString uuid)
+  print $ jsonPayload message
+  matrixQuery conn "PUT" msgUri (jsonPayload message)
+
+sendImage :: MatrixConn -> String -> Text -> Payload -> IO EventId
+sendImage conn room body file = sendFile conn room body "m.image" file

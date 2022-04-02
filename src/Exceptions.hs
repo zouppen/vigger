@@ -3,6 +3,7 @@ module Exceptions ( ViggerException(..)
                   -- Re-exports
                   , try
                   , throw
+                  , throwIO
                   , bracket
                   , viggerLoopCatch
                   ) where
