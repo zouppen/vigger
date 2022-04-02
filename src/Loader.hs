@@ -22,12 +22,14 @@ import Exceptions
 import Ffmpeg
 import Trasher
 import Watch
+import Matrix
 import VideoTools (TriggerData(..), snapshotFrame)
 
 -- |Initialized stuff, intended to be used as a singleton, initialized
 -- with `withStuff`.
-data Stuff = Stuff { ih     :: INotify
-                   , trash  :: Trash
+data Stuff = Stuff { ih         :: INotify
+                   , trash      :: Trash
+                   , matrixConn :: MatrixConn
                    }
 
 -- |Camera consists of video splitter and file watcher
@@ -44,8 +46,9 @@ data TriggerOp = TriggerOp { motionStart  :: IO ()
                            }
 
 -- |Initialize all the bells and whistles and run the action.
-withStuff :: (Stuff -> IO ()) -> IO ()
-withStuff act = do
+withStuff :: Config -> (Stuff -> IO ()) -> IO ()
+withStuff Config{..} act = do
+  matrixConn <- initMatrixConn matrix
   withINotify $ \ih -> do
     withTrasher $ \trash -> do
       act Stuff{..}

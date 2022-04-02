@@ -10,12 +10,12 @@ import Config
 
 main = do
   Options{..} <- parseCommandAndConfig
-  withStuff $ \stuff -> do
+  withStuff config $ \stuff -> do
     triggerOps <- initTriggers config stuff
     -- Handle incoming events
     putStrLn "Up and running..."
     case interface of
-      Cli -> commandInterface config triggerOps
+      Cli -> commandInterface config (matrixConn stuff) triggerOps
       Unit unit -> journalInterface config unit triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps

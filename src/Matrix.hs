@@ -113,7 +113,7 @@ upload :: MatrixConn -> Payload -> IO ContentUri
 upload conn payload =
   matrixQuery conn "POST" "/_matrix/media/v3/upload" (Just payload)
 
--- |Upload and send
+-- |Upload and send an attachment of given kind.
 sendFile :: MatrixConn -> String -> Text -> Text -> Payload -> IO EventId
 sendFile conn room body msgtype file = do
   RoomId roomId <- joinRoom conn room
@@ -135,5 +135,6 @@ sendFile conn room body msgtype file = do
   print $ jsonPayload message
   matrixQuery conn "PUT" msgUri (jsonPayload message)
 
+-- |Sendfile which sends m.image
 sendImage :: MatrixConn -> String -> Text -> Payload -> IO EventId
 sendImage conn room body file = sendFile conn room body "m.image" file

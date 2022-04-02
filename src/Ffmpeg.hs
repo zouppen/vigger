@@ -6,6 +6,7 @@ module Ffmpeg ( startVideoSplit
               , ProcessHandle
               , Jpeg
               , writeJpeg
+              , jpegPayload
               ) where
 
 import System.IO
@@ -16,6 +17,7 @@ import System.IO.Temp (withSystemTempFile, emptySystemTempFile)
 import System.FilePath.ByteString (RawFilePath)
 import System.Exit
 import Control.Exception (throwIO)
+import Network.Curl.Aeson (Payload(..))
 
 import Exceptions
 
@@ -24,6 +26,8 @@ newtype Jpeg = Jpeg BS.ByteString
 -- |Store given JPEG to given file.
 writeJpeg :: FilePath -> Jpeg -> IO ()
 writeJpeg path (Jpeg bs) = BS.writeFile path bs
+
+jpegPayload (Jpeg bs) = Payload "image/jpeg" $ B.fromStrict bs
 
 -- |Takes last frame of the video. This iterates through the whole
 -- video so it's useful only for videos which are already split to
