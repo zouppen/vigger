@@ -16,7 +16,7 @@ main = do
     putStrLn "Up and running..."
     case interface of
       Cli -> commandInterface config (matrixConn stuff) triggerOps
-      Unit unit -> journalInterface config unit triggerOps
+      Unit unit -> journalInterface config (matrixConn stuff) unit triggerOps
     -- Shutting down operations
     traverse_ shutdown triggerOps
 
