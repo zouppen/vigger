@@ -1,0 +1,50 @@
+# Recording path. Here we store the recordings. Template supports the
+# following keys: camera, start. Start is a date formatter, see syntax:
+# https://hackage.haskell.org/package/time-1.8/docs/Data-Time-Format.html#v:formatTime
+#
+# File extension can be freely specified and will pick the desired
+# container. You must make sure the video format can be stored in such
+# container.
+recording_path: /tmp/vigger/{{start|%Y-%m-%d}}/{{camera}}/{{start|%H%M%S%z}}.mp4
+
+# Snapshots are not normally stored unless triggered by command line
+# command "snapshot". In that case the files are stored in the
+# following path. The template keys: camera and time. Extension must
+# be .jpg
+snapshot_path: /tmp/vigger-{{camera}}-{{time|%Y-%m-%d-%H:%M:%S%z}}.jpg
+
+# Define where the alerts go. If you don't like to use Matrix then use
+# Matrix appservices to bridge it to Telegram or something you
+# use. Matrix, however, is the only chat protocol we directly support.
+matrix:
+  # Homeserver, with or without protocol and port (well-known is used)
+  homeserver: example.com
+  # Access token (you need to login first and get it here)
+  access_token: MDAxxxxxxxxxxxxxxxxxxxx
+  # Room where to post alarms
+  room: "#alarms:example.com"
+
+# A trigger may contain one or more cameras. When trigger matches
+# the key used by the motion detectors in (systemd-journald
+# operating mode) recording starts/stops
+triggers:
+  hallway:
+    cameras:
+      north:
+        # Camera URL, any protocol and video format supported by
+        # FFmpeg and the container format will work
+        url: rtsp://192.168.0.123/82137
+        # How many seconds to capture before motion
+        precapture: 10
+        # Camera watchdog in seconds after stream is restarted
+        timeout: 30
+      south:
+        url: rtsp://192.168.0.120:7447/123897
+        precapture: 10
+        timeout: 30
+  kitchen:
+    cameras:
+      kitchen:
+        url: rtsp://192.168.0.121/spurdo
+        precapture: 10
+        timeout: 30
