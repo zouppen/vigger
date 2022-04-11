@@ -32,12 +32,13 @@ jpegPayload (Jpeg bs) = Payload "image/jpeg" $ B.fromStrict bs
 -- |Takes last frame of the video. This iterates through the whole
 -- video so it's useful only for videos which are already split to
 -- segments. Returns ByteString or throws ViggerException.
-takeLastFrame :: FilePath -> IO Jpeg
-takeLastFrame infile = withSystemTempFile "vigger.jpg" $ \outfile h -> do
+takeLastFrame :: Int -> FilePath -> IO Jpeg
+takeLastFrame rotation infile = withSystemTempFile "vigger.jpg" $ \outfile h -> do
   p <- runFfmpeg Nothing [ "-loglevel", "warning"
                          , "-i", infile
                          , "-update", "1"
                          , "-q:v", "3"
+                         , "-metadata:s:v:0", "rotate=" <> show rotation
                          , outfile
                          ]
   val <- waitForProcess p
@@ -47,8 +48,8 @@ takeLastFrame infile = withSystemTempFile "vigger.jpg" $ \outfile h -> do
 
 -- |Concatenates video using FFmpeg concat demuxer. May throw
 -- ViggerException in case FFmpeg returns non-zero return value.
-composeVideo :: Foldable t => FilePath -> t RawFilePath -> IO ()
-composeVideo outfile infiles = withSystemTempFile "vigger.txt" $ \path h -> do
+composeVideo :: Foldable t => Int -> FilePath -> t RawFilePath -> IO ()
+composeVideo rotation outfile infiles = withSystemTempFile "vigger.txt" $ \path h -> do
   B.hPutStr h payload
   hClose h
   p <- runFfmpeg Nothing [ "-loglevel", "warning"
@@ -56,6 +57,7 @@ composeVideo outfile infiles = withSystemTempFile "vigger.txt" $ \path h -> do
                          , "-safe", "0"
                          , "-i", path
                          , "-c", "copy"
+                         , "-metadata:s:v:0", "rotate=" <> show rotation
                          , outfile
                          ]
   val <- waitForProcess p
@@ -77,8 +79,8 @@ stopVideoSplit h = do
   pure ()
 
 -- |Start splitting the video and output to given directory
-startVideoSplit :: Int -> FilePath -> String -> IO ProcessHandle
-startVideoSplit rotation dir video = runFfmpeg (Just dir)
+startVideoSplit :: FilePath -> String -> IO ProcessHandle
+startVideoSplit dir video = runFfmpeg (Just dir)
   [ "-rtsp_transport", "tcp"
   , "-loglevel", "warning"
   , "-i", video
@@ -86,7 +88,6 @@ startVideoSplit rotation dir video = runFfmpeg (Just dir)
   , "-reset_timestamps", "1"
   , "-segment_time", "0"
   , "-c", "copy"
-  , "-metadata:s:v:0", "rotate=" <> show rotation
   , "tmp-%d.mp4"
   ]
 

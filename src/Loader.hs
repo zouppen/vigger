@@ -80,18 +80,18 @@ forkTrigger stuff triggerName Trigger{..} = do
         stopWatch watch
       cameraState = atomically $ traverse (lastEnqueue . watch) ops
       trigSnapshot = do
-        let files = M.map (fmap path . lastEnqueue . watch) ops
+        let rot camOp = maybe 0 id $ rotate $ watchCamera $ watch camOp 
+        let files = M.map (\camOp -> (rot camOp, fmap path $ lastEnqueue $ watch camOp)) ops
         snapshotFrame files
   pure TriggerOp{..}
 
 -- |Fork video splitter and cleaner for an individual camera.
 forkCamera :: Stuff -> Camera -> IO CameraOp
-forkCamera Stuff{..} Camera{..} = do
+forkCamera Stuff{..} cam@Camera{..} = do
   -- Start change watcher
-  watch <- forkWatch trash (toEnum precapture) ih
+  watch <- forkWatch trash cam ih
   -- Start video splitter with FFmpeg
-  let rotation = maybe 0 id rotate
-  let start = startVideoSplit rotation (workDir watch) url
+  let start = startVideoSplit (workDir watch) url
   splitterStop <- case timeout of
     Just timeout -> do
       tid <- forkIO $ deadManLoop

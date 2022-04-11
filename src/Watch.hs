@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, OverloadedStrings #-}
-module Watch ( Watch(stopWatch, lastEnqueue, workDir)
+module Watch ( Watch(stopWatch, lastEnqueue, workDir, watchCamera)
              , startCapture
              , stopCapture
              , forkWatch
@@ -22,6 +22,7 @@ import Control.Applicative
 import Exceptions
 import Trasher (Trash)
 import Temporary
+import Config(Camera(..))
 
 data FileEvent = FileEvent { time :: EpochTime
                            , path :: RawFilePath
@@ -29,8 +30,9 @@ data FileEvent = FileEvent { time :: EpochTime
 
 -- |Capture data type. Returns files and a cleanup action for them.
 data Capture = Capture
-  { captureFiles :: [RawFilePath] -- ^Captured files
-  , captureClean :: STM ()        -- ^Action to remove files
+  { captureFiles  :: [RawFilePath] -- ^Captured files
+  , captureClean  :: STM ()        -- ^Action to remove files
+  , captureCamera :: Camera        -- ^User data about the camera
   }
 
 data Watch = Watch
@@ -43,6 +45,7 @@ data Watch = Watch
   , stopWatch    :: IO ()            -- ^Stop watch. Doesn't remove
                                      -- files. Do not call twice.
   , workDir      :: FilePath         -- ^Temporary directory holding the videos
+  , watchCamera  :: Camera           -- ^User data
   }
 
 -- |Start capture
@@ -63,12 +66,13 @@ stopCapture watch@Watch{..} = do
   -- Empty the event queue to a list
   captureFiles <- map path <$> flushTQueue eventQueue
   let captureClean = traverse_ trash captureFiles
+      captureCamera = watchCamera
   pure Capture{..}
 
 -- |Creates new temporary directory and starts watching closed files
 -- in that directory and purging them after given timeout.
-forkWatch :: Trash -> CTime -> INotify -> IO Watch
-forkWatch trash maxAge ih = do
+forkWatch :: Trash -> Camera -> INotify -> IO Watch
+forkWatch trash watchCamera ih = do
   eventQueue <- newTQueueIO
   eventInHand <- newEmptyTMVarIO
   purgeEnabled <- newTVarIO True -- Motion stopped at start
@@ -76,7 +80,7 @@ forkWatch trash maxAge ih = do
   lastEnqueueVar <- newTVarIO $ FileEvent 0 ""
   let lastEnqueue = readTVar lastEnqueueVar
   (purgeThread, workDir) <- forkWithTempDir $ \workDir -> forever $
-    purgeEvent maxAge Watch{stopWatch = undefined, ..}
+    purgeEvent Watch{stopWatch = undefined, ..}
   -- INotify uses RawFilePath internally so we need to convert between
   -- FilePath and RawFilePath here.
   watchDesc <- watchClosures ih (encodeFilePath workDir) $ \path -> do
@@ -103,8 +107,8 @@ toClosedFile Closed{..} = if isDirectory then Nothing else maybeFilePath
 toClosedFile _ = Nothing
 
 -- |Purge old file if we have permission to do so.
-purgeEvent :: CTime -> Watch -> IO ()
-purgeEvent maxAge Watch{..} = do
+purgeEvent :: Watch -> IO ()
+purgeEvent Watch{..} = do
   FileEvent{..} <- atomically $ do
     -- Keep going only if purging is enabled
     readTVar purgeEnabled >>= guard
@@ -116,7 +120,8 @@ purgeEvent maxAge Watch{..} = do
   -- Sleep until it should expire
   do
     now <- epochTime
-    let expiresIn = time - now + maxAge
+    let maxAge = toEnum $ precapture watchCamera
+        expiresIn = time - now + maxAge
     when (expiresIn > 0) $ threadDelay $ 1000000 * fromEnum expiresIn
 
   -- If we have the event still in hand, it should be

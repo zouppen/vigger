@@ -34,14 +34,19 @@ data TriggerData = TriggerData { startTime   :: ZonedTime
 -- |Collect a frame snapshot. May block for some time because waits
 -- for new videos and then renders the snapshots. You don't probably
 -- want to call this directly but trigSnapshot from Loader.
-snapshotFrame :: Map Text (STM RawFilePath) -> IO (Map Text Jpeg)
+snapshotFrame :: Map Text (Int, STM RawFilePath) -> IO (Map Text Jpeg)
 snapshotFrame fileActs = do
-  -- Get actions Wrap the action to reference value (the startup value)
-  newValueActs <- atomically $ traverse changeGuard fileActs
+  -- Wrap the action to reference value (the startup value)
+  newValueActs <- atomically $ traverse (actOnSnd changeGuard) fileActs
   -- Then run encoding as new files appear.
-  forConcurrently newValueActs $ \act -> do
+  forConcurrently newValueActs $ \(rotation, act) -> do
     file <- atomically act
-    takeLastFrame $ decodeFilePath file
+    takeLastFrame rotation $ decodeFilePath file
+
+actOnSnd :: Monad m => (b -> m c) -> (a, b) -> m (a, c)
+actOnSnd f (a, b) = do
+  b' <- f b
+  pure (a, b')
 
 -- |Store given map to files
 storeJpegMap :: Config -> Text -> Map Text Jpeg -> IO (Map Text FilePath)
@@ -74,7 +79,7 @@ renderVideos Config{..} TriggerData{..} =
       let outfile = unpack $ substitute subst recordingPath
       createDirectoryIfMissing True $ takeDirectory outfile
       -- Encode video and remove files afterwards
-      composeVideo outfile captureFiles
+      composeVideo (maybe 0 id $ rotate captureCamera) outfile captureFiles
       atomically captureClean
       pure outfile
 
