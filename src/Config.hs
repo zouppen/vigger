@@ -34,8 +34,9 @@ data Options = Options
   , interface :: Interface
   } deriving (Show)
 
-data Interface = Cli         -- ^Command line interface
-               | Unit String -- ^Systemd journal unit
+data Interface = Cli           -- ^Command line interface
+               | Unit String   -- ^Systemd journal unit
+               | Simple        -- ^Simple command slave
                deriving (Show)
 
 data Config = Config { recordingPath :: Text
@@ -77,7 +78,7 @@ instance FromJSON Camera where
 
 -- |Returns Options parser, leave a hole in the config.
 optParser :: Parser Options
-optParser = Options undefined <$> config <*> (cli <|> unit)
+optParser = Options undefined <$> config <*> (cli <|> unit <|> simple)
   where
     config = strOption ( short 'c' <>
                          long "config" <>
@@ -88,6 +89,7 @@ optParser = Options undefined <$> config <*> (cli <|> unit)
                                 metavar "NAME" <>
                                 help "Systemd unit name" )
     cli = flag' Cli (short 'i' <> long "cli")
+    simple = flag' Simple (short 's' <> long "simple")
 
 opts :: ParserInfo Options
 opts = info (optParser <**> helper)

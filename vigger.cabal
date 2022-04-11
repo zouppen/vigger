@@ -24,7 +24,8 @@ executable vigger
                        Matrix,
                        VideoTools,
                        CommandInterface,
-                       JournalInterface
+                       JournalInterface,
+                       SimpleInterface,
                        Exceptions,
                        Formatter,
                        Watch
