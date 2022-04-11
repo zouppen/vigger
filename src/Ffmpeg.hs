@@ -34,13 +34,19 @@ jpegPayload (Jpeg bs) = Payload "image/jpeg" $ B.fromStrict bs
 -- segments. Returns ByteString or throws ViggerException.
 takeLastFrame :: Int -> FilePath -> IO Jpeg
 takeLastFrame rotation infile = withSystemTempFile "vigger.jpg" $ \outfile h -> do
-  p <- runFfmpeg Nothing [ "-loglevel", "warning"
-                         , "-i", infile
-                         , "-update", "1"
-                         , "-q:v", "3"
-                         , "-metadata:s:v:0", "rotate=" <> show rotation
-                         , outfile
-                         ]
+  -- FIXME render uncompressed frames and then just encode the last.
+  let rotArgs = case rotation of
+        0   -> []
+        90  -> ["-vf", "transpose=1"]
+        180 -> ["-vf", "transpose=1,transpose=1"]
+        270 -> ["-vf", "transpose=2"]
+        _   -> error "Invalid rotation"
+      args = [ "-loglevel", "warning"
+             , "-i", infile
+             , "-update", "1"
+             , "-q:v", "3"
+             ] <> rotArgs <> [outfile]
+  p <- runFfmpeg Nothing args
   val <- waitForProcess p
   case val of
     ExitSuccess   -> Jpeg <$> BS.hGetContents h
