@@ -48,3 +48,5 @@ triggers:
         url: rtsp://192.168.0.121/spurdo
         precapture: 10
         timeout: 30
+        # Camera is upside down
+        rotate: 180

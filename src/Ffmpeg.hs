@@ -77,8 +77,8 @@ stopVideoSplit h = do
   pure ()
 
 -- |Start splitting the video and output to given directory
-startVideoSplit :: FilePath -> String -> IO ProcessHandle
-startVideoSplit dir video = runFfmpeg (Just dir)
+startVideoSplit :: Int -> FilePath -> String -> IO ProcessHandle
+startVideoSplit rotation dir video = runFfmpeg (Just dir)
   [ "-rtsp_transport", "tcp"
   , "-loglevel", "warning"
   , "-i", video
@@ -86,6 +86,7 @@ startVideoSplit dir video = runFfmpeg (Just dir)
   , "-reset_timestamps", "1"
   , "-segment_time", "0"
   , "-c", "copy"
+  , "-metadata:s:v:0", "rotate=" <> show rotation
   , "tmp-%d.mp4"
   ]
 

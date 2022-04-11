@@ -60,6 +60,7 @@ data Camera = Camera
   , timeout    :: Maybe Int -- ^Timeout in seconds (max interval
                             -- between keyframes). If Nothing, then no
                             -- dead man switch used
+  , rotate     :: Maybe Int -- ^Video rotation, default: no rotation
   } deriving (Show, Generic)
 
 instance FromJSON Config where

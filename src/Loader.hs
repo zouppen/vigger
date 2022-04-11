@@ -90,7 +90,8 @@ forkCamera Stuff{..} Camera{..} = do
   -- Start change watcher
   watch <- forkWatch trash (toEnum precapture) ih
   -- Start video splitter with FFmpeg
-  let start = startVideoSplit (workDir watch) url
+  let rotation = maybe 0 id rotate
+  let start = startVideoSplit rotation (workDir watch) url
   splitterStop <- case timeout of
     Just timeout -> do
       tid <- forkIO $ deadManLoop
