@@ -62,6 +62,7 @@ data Camera = Camera
                             -- between keyframes). If Nothing, then no
                             -- dead man switch used
   , rotate     :: Maybe Int -- ^Video rotation, default: no rotation
+  , exec       :: Maybe String -- ^Command to run with every video fragment, default: no action
   } deriving (Show, Generic)
 
 instance FromJSON Config where

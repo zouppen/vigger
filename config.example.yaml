@@ -38,6 +38,8 @@ triggers:
         precapture: 10
         # Camera watchdog in seconds after stream is restarted
         timeout: 30
+        # Run a command for every video fragment (optional)
+        exec: /opt/analyze
       south:
         url: rtsp://192.168.0.120:7447/123897
         precapture: 10

@@ -11,10 +11,11 @@ module Watch ( Watch(stopWatch, lastEnqueue, workDir, watchCamera)
 import System.INotify
 import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
+import System.Process
 import Foreign.C.Types (CTime)
 import Control.Concurrent (killThread, threadDelay)
 import Control.Concurrent.STM
-import Control.Monad (when, forever, guard)
+import Control.Monad (when, forever, guard, void)
 import Data.Foldable (traverse_)
 import System.FilePath.ByteString
 import Control.Applicative
@@ -89,6 +90,10 @@ forkWatch trash watchCamera ih = do
       let e = FileEvent{..}
       writeTQueue eventQueue e
       writeTVar lastEnqueueVar e
+    -- Optionally execute command after the file. NB! This just forks
+    -- it without following the child, so the user must make sure the
+    -- scripts finish in a reasonable time.
+    maybe nop (void . forkScript path) (exec watchCamera)
   let stopWatch = do
         removeWatch watchDesc
         killThread purgeThread
@@ -129,6 +134,15 @@ purgeEvent Watch{..} = do
   atomically $ noRetry $ do
     takeTMVar eventInHand
     trash path
+
+-- |Fork script into background
+forkScript :: RawFilePath -> FilePath -> IO ProcessHandle
+forkScript file cmd = do
+  (_, _, _, ph) <- createProcess cp
+  pure ph
+  where cp = (proc cmd [decodeFilePath file]){ std_in = NoStream
+                                             , close_fds = True
+                                             }
 
 -- |Shorthand for doing nothing
 nop :: Applicative m => m ()
