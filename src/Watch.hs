@@ -13,7 +13,7 @@ import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
 import System.Process
 import Foreign.C.Types (CTime)
-import Control.Concurrent (killThread, threadDelay)
+import Control.Concurrent (killThread, threadDelay, forkIO)
 import Control.Concurrent.STM
 import Control.Monad (when, forever, guard, void)
 import Data.Foldable (traverse_)
@@ -93,7 +93,7 @@ forkWatch trash watchCamera ih = do
     -- Optionally execute command after the file. NB! This just forks
     -- it without following the child, so the user must make sure the
     -- scripts finish in a reasonable time.
-    maybe nop (void . forkScript path) (exec watchCamera)
+    maybe nop (\x -> forkScript path x >>= waitBg) (exec watchCamera)
   let stopWatch = do
         removeWatch watchDesc
         killThread purgeThread
@@ -143,6 +143,11 @@ forkScript file cmd = do
   where cp = (proc cmd [decodeFilePath file]){ std_in = NoStream
                                              , close_fds = True
                                              }
+
+-- |Not so clean way to avoid zombie processes, but does it's work if
+-- we aren't interested about them anyway.
+waitBg :: ProcessHandle -> IO ()
+waitBg = void . forkIO . void . waitForProcess
 
 -- |Shorthand for doing nothing
 nop :: Applicative m => m ()
