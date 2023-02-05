@@ -63,6 +63,9 @@ data Camera = Camera
                             -- dead man switch used
   , rotate     :: Maybe Int -- ^Video rotation, default: no rotation
   , exec       :: Maybe String -- ^Command to run with every video fragment, default: no action
+  , ffmpegArgs :: Maybe [String] -- ^Parameters to append to FFmpeg
+                                 -- command line, such as another
+                                 -- processing pipeline.
   } deriving (Show, Generic)
 
 instance FromJSON Config where

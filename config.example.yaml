@@ -40,6 +40,8 @@ triggers:
         timeout: 30
         # Run a command for every video fragment (optional)
         exec: /opt/analyze
+        # Also, store the audio to a file (optional)
+        ffmpeg_args: ['-vn', '-c', 'copy', 'audiodump.aac']
       south:
         url: rtsp://192.168.0.120:7447/123897
         precapture: 10

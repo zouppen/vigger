@@ -91,7 +91,7 @@ forkCamera Stuff{..} cam@Camera{..} = do
   -- Start change watcher
   watch <- forkWatch trash cam ih
   -- Start video splitter with FFmpeg
-  let start = startVideoSplit (workDir watch) url
+  let start = startVideoSplit (workDir watch) url (maybe [] id ffmpegArgs)
   splitterStop <- case timeout of
     Just timeout -> do
       tid <- forkIO $ deadManLoop

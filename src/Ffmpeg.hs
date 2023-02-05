@@ -85,8 +85,8 @@ stopVideoSplit h = do
   pure ()
 
 -- |Start splitting the video and output to given directory
-startVideoSplit :: FilePath -> String -> IO ProcessHandle
-startVideoSplit dir video = runFfmpeg (Just dir)
+startVideoSplit :: FilePath -> String -> [String] -> IO ProcessHandle
+startVideoSplit dir video extraArgs = runFfmpeg (Just dir) $
   [ "-rtsp_transport", "tcp"
   , "-loglevel", "warning"
   , "-i", video
@@ -95,7 +95,7 @@ startVideoSplit dir video = runFfmpeg (Just dir)
   , "-segment_time", "0"
   , "-c", "copy"
   , "tmp-%d.mp4"
-  ]
+  ] <> extraArgs
 
 -- |Run FFmpeg with given working directory and arguments. Makes sure
 -- stdin is not read and always overwrite.
