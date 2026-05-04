@@ -93,7 +93,8 @@ startVideoSplit dir video extraArgs = runFfmpeg (Just dir) $
   , "-f", "segment"
   , "-reset_timestamps", "1"
   , "-segment_time", "0"
-  , "-c", "copy"
+  , "-c:v", "copy"
+  , "-c:a", "pcm_s16le"
   , "tmp-%d.mp4"
   ] <> extraArgs
 
